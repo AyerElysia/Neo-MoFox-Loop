@@ -18,7 +18,6 @@ from src.kernel.concurrency import (
     get_watchdog,
     WatchDog,
     StreamHeartbeat,
-    TaskNotFoundError,
     TaskGroupError,
 )
 

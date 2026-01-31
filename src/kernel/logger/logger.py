@@ -6,18 +6,17 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.traceback import install as install_rich_traceback
 
-from .color import COLOR, get_rich_color, DEFAULT_LEVEL_COLORS
+from .color import COLOR, get_rich_color
 from .file_handler import FileHandler, RotationMode
 
 

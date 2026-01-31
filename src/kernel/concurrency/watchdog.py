@@ -6,13 +6,11 @@ WatchDog 监控系统
 
 from __future__ import annotations
 
-import asyncio
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
-from uuid import uuid4
 
 from .task_manager import TaskManager
 from .exceptions import WatchDogError

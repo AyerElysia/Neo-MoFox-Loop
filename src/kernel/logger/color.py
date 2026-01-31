@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from rich.console import Console as RichConsole
 
 
 class COLOR(Enum):

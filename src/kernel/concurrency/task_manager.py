@@ -7,14 +7,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 from threading import Lock
 from typing import Any
 from uuid import uuid4
 
 from .task_info import TaskInfo
 from .task_group import TaskGroup
-from .exceptions import TaskNotFoundError, TaskGroupAlreadyExists
+from .exceptions import TaskNotFoundError
 
 
 class TaskManager:
@@ -87,7 +86,7 @@ class TaskManager:
             RuntimeError: 如果不在异步上下文中调用
         """
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             raise RuntimeError(
                 "TaskManager.create_task must be called within an async context"

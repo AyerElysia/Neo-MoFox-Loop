@@ -6,7 +6,6 @@ Logger 模块单元测试
 
 from __future__ import annotations
 
-import pytest
 from io import StringIO
 
 from rich.console import Console
@@ -463,7 +462,7 @@ class TestFileOutput:
 
         try:
             console = Console(file=StringIO())
-            logger = get_logger(
+            _ = get_logger(
                 "remove_file_test",
                 enable_file=True,
                 log_dir=temp_dir,
