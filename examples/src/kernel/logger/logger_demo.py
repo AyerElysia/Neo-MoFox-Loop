@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # 添加 src 目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.kernel.logger import get_logger, COLOR
 

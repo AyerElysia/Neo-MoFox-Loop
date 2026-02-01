@@ -3,12 +3,14 @@
 
 演示如何使用 kernel.db 模块进行数据库操作。
 """
-
+import sys
 import asyncio
 from pathlib import Path
 
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, declarative_base
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.kernel.db import (
     AggregateQuery,

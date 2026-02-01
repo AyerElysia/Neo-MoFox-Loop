@@ -10,11 +10,7 @@ from pathlib import Path
 import os
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-# 更改工作目录到项目根目录
-os.chdir(project_root)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.kernel.concurrency import (
     get_task_manager,

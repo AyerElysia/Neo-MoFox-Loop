@@ -122,20 +122,39 @@ class TestTaskManager:
         """测试等待所有任务完成"""
         tm = get_task_manager()
 
+        # 清理之前的任务（避免全局单例带来的状态污染）
+        # 先等待所有现有任务完成，然后清理
+        for task_info in list(tm.get_all_tasks()):
+            if not task_info.is_done() and task_info.task is not None:
+                try:
+                    await asyncio.wait_for(task_info.task, timeout=1.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError, RuntimeError):
+                    # 忽略超时、取消或运行时错误
+                    pass
+        tm.cleanup_tasks()
+
         async def sample_task(n: int):
             await asyncio.sleep(0.1)
             return n
 
         # 创建多个任务
+        created_tasks = []
         for i in range(5):
-            tm.create_task(sample_task(i))
+            task_info = tm.create_task(sample_task(i))
+            created_tasks.append(task_info)
 
         # 等待所有任务完成
         await tm.wait_all_tasks()
 
-        # 验证所有任务已完成
+        # 清理已完成任务并验证没有活跃任务
+        tm.cleanup_tasks()
         active_tasks = tm.get_active_tasks()
-        assert len(active_tasks) == 0
+        # 检查我们创建的任务是否都已完成
+        for task_info in created_tasks:
+            assert task_info.is_done(), f"Task {task_info.name} should be done"
+        # 验证没有非守护的活跃任务
+        active_non_daemon = [t for t in active_tasks if not t.daemon]
+        assert len(active_non_daemon) == 0
 
     @pytest.mark.asyncio
     async def test_cancel_task(self) -> None:
