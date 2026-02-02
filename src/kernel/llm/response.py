@@ -1,3 +1,14 @@
+"""LLM 响应模块
+
+提供 LLMResponse 类，统一处理流式和非流式响应。
+
+LLMResponse 支持：
+- await 模式：收集完整响应
+- async for 模式：流式处理响应
+- 自动追加响应到上下文
+- 工具调用处理
+"""
+
 from __future__ import annotations
 
 import json

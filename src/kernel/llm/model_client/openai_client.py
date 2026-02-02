@@ -68,7 +68,7 @@ def _payloads_to_openai_messages(payloads: list[LLMPayload]) -> tuple[list[dict[
                     tool_call_id = getattr(part, "call_id")
                 if content_text is None and hasattr(part, "to_text"):
                     try:
-                        content_text = part.to_text()
+                        content_text = part.to_text()   # type: ignore[attr-defined]
                     except Exception:
                         pass
 

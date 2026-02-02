@@ -1,3 +1,14 @@
+"""LLM 请求模块
+
+提供 LLMRequest 类，用于构建和执行 LLM 请求。
+
+LLMRequest 支持：
+- 构建 LLMPayload 列表
+- 负载均衡和重试策略
+- 指标收集
+- 流式和非流式响应
+"""
+
 from __future__ import annotations
 
 import asyncio

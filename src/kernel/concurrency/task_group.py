@@ -79,7 +79,12 @@ class TaskGroup:
         self._exception = None
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
         """退出上下文，等待所有任务完成"""
         self._active = False
 
