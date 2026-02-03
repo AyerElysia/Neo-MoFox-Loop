@@ -18,7 +18,7 @@ import datetime
 from datetime import timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,32 +27,23 @@ Base = declarative_base()
 
 
 # 数据库兼容的字段类型辅助函数
-def get_string_field(max_length: int = 255, **kwargs: Any) -> String | Text:
+def get_string_field(*_: Any, **kwargs: Any) -> Text:
     """
-    根据数据库类型返回合适的字符串字段类型
+    返回字符串字段类型（统一使用 Text）
 
-    对于需要索引的字段：
-    - PostgreSQL: 可以使用 Text，但为了兼容性使用 VARCHAR
-    - SQLite: 可以使用 Text，无长度限制
+    Text 类型适用于所有数据库：
+    - PostgreSQL: Text 性能与 VARCHAR 相当
+    - SQLite: Text 无长度限制
 
     Args:
-        max_length: 最大长度
-        **kwargs: 传递给 String/Text 的额外参数
+        *_: 保留位置参数以兼容旧调用方式
+        **kwargs: 传递给 Text 的额外参数
 
     Returns:
-        SQLAlchemy 类型
+        SQLAlchemy Text 类型
     """
-    from src.core.config import get_core_config
-
-    config = get_core_config()
-    db_type = config.database.database_type
-
-    # PostgreSQL 可以使用 Text，但为了跨数据库迁移兼容性，使用 VARCHAR
-    if db_type == "postgresql":
-        return String(max_length, **kwargs)
-    # SQLite 使用 Text（无长度限制）
-    else:
-        return Text(**kwargs)
+    # 统一使用 Text，避免在模块导入时访问配置
+    return Text(**kwargs)
 
 
 class ChatStreams(Base):

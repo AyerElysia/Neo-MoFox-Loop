@@ -84,6 +84,18 @@ class PermissionManager:
             self._config = get_core_config()
         return self._config
 
+    def generate_raw_person_id(self, platform: str, user_id: str) -> str:
+        """生成原始格式的 person_id
+
+        Args:
+            platform: 平台标识
+            user_id: 平台内部用户ID
+
+        Returns:
+            原始格式的 person_id (platform:user_id)
+        """
+        return get_user_query_helper().generate_raw_person_id(platform, user_id)
+
     def generate_person_id(self, platform: str, user_id: str) -> str:
         """生成哈希后的 person_id
 

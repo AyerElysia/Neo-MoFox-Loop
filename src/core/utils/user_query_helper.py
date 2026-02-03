@@ -32,6 +32,18 @@ class UserQueryHelper:
         self._ChatStreams = ChatStreams
         self._Messages = Messages
 
+    def generate_raw_person_id(self, platform: str, user_id: str) -> str:
+        """生成原始格式的 person_id
+
+        Args:
+            platform: 平台标识
+            user_id: 平台内部用户ID
+
+        Returns:
+            原始格式的 person_id (platform:user_id)
+        """
+        return f"{platform}:{user_id}"
+
     @lru_cache(maxsize=10000)
     def generate_person_id(self, platform: str, user_id: str) -> str:
         """生成 person_id
