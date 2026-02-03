@@ -14,6 +14,7 @@ from src.core.components.types import ComponentState
 
 if TYPE_CHECKING:
     from src.core.components.base.adapter import BaseAdapter
+    from src.core.managers.plugin_manager import PluginManager
 
 logger = get_logger("adapter_manager")
 
@@ -271,7 +272,7 @@ def reset_adapter_manager() -> None:
 
 
 # 避免循环导入的延迟导入
-def _get_plugin_manager():
+def _get_plugin_manager() -> "PluginManager":
     """延迟导入插件管理器以避免循环导入。"""
     from src.core.managers.plugin_manager import get_plugin_manager as _get_plugin_manager
     return _get_plugin_manager()

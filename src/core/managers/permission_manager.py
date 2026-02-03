@@ -4,6 +4,8 @@
 支持基于权限组的层级权限和基于命令的细粒度权限覆盖。
 """
 
+from __future__ import annotations
+
 import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any

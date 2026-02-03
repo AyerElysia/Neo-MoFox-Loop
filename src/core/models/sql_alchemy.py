@@ -17,6 +17,7 @@ import datetime
 import time
 
 from datetime import timezone
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -27,7 +28,7 @@ Base = declarative_base()
 
 
 # 数据库兼容的字段类型辅助函数
-def get_string_field(max_length=255, **kwargs):
+def get_string_field(max_length: int = 255, **kwargs: Any) -> String | Text:
     """
     根据数据库类型返回合适的字符串字段类型
 
@@ -44,12 +45,8 @@ def get_string_field(max_length=255, **kwargs):
     """
     from src.core.config import get_core_config
 
-    try:
-        config = get_core_config()
-        db_type = config.database.database_type
-    except RuntimeError:
-        # 配置未初始化，使用默认值（sqlite）
-        db_type = "sqlite"
+    config = get_core_config()
+    db_type = config.database.database_type
 
     # PostgreSQL 可以使用 Text，但为了跨数据库迁移兼容性，使用 VARCHAR
     if db_type == "postgresql":

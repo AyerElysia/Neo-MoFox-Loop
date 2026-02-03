@@ -11,7 +11,6 @@ from src.kernel.logger import get_logger
 from src.core.components.registry import get_global_registry
 
 if TYPE_CHECKING:
-    from src.core.components.base.tool import BaseTool
     from src.core.components.base.plugin import BasePlugin
     from src.core.managers.tool_manager.tool_history import ToolHistory
     from src.core.models.message import Message
@@ -46,6 +45,7 @@ class ToolUse:
         from .tool_history import ToolHistory
 
         self._tool_history = ToolHistory()
+        self._cache_enabled: bool = False
         logger.debug("Tool 调用管理器初始化完成")
 
     async def execute_tool(
@@ -88,6 +88,8 @@ class ToolUse:
         registry = get_global_registry()
         tool_cls = registry.get(signature)
 
+        from src.core.components.base.tool import BaseTool
+
         if not tool_cls or not issubclass(tool_cls, BaseTool):
             raise ValueError(f"Tool 类未找到: {signature}")
 
@@ -95,16 +97,15 @@ class ToolUse:
         tool_instance = tool_cls(plugin)
 
         # 检查缓存
-        cached_result = None
-        if hasattr(self, '_cache_enabled') and self._cache_enabled:
-            # 将 kwargs 转换为字典形式
-            args_dict = {k: v for k, v in kwargs.items()}
+        cached_result: dict[str, Any] | None = None
+        if self._cache_enabled:
+            args_dict = kwargs.copy()
             cached_result = self._tool_history.get_cached(
                 tool_instance.tool_name,
                 args_dict
             )
 
-            if cached_result:
+            if cached_result is not None:
                 # 记录缓存的调用
                 execution_time = time.time() - start_time
                 self._tool_history.add_call(
@@ -148,7 +149,7 @@ class ToolUse:
             )
 
             # 如果成功且开启了缓存，则缓存结果
-            if success and hasattr(self, '_cache_enabled') and self._cache_enabled:
+            if success and self._cache_enabled:
                 self._tool_history.cache_result(
                     tool_name=tool_instance.tool_name,
                     args={k: v for k, v in kwargs.items()},
@@ -201,7 +202,7 @@ class ToolUse:
         Examples:
             >>> tool_use.enable_caching(True)
         """
-        if hasattr(self, '_cache_enabled') != enabled:
+        if self._cache_enabled != enabled:
             self._cache_enabled = enabled
             status = "启用" if enabled else "禁用"
             logger.debug(f"工具结果缓存已{status}")

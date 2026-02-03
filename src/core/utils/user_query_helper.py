@@ -5,7 +5,7 @@
 
 import time
 import hashlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from functools import lru_cache
 
 from src.kernel.db import CRUDBase, QueryBuilder
@@ -114,11 +114,14 @@ class UserQueryHelper:
         """
         person_id = self.generate_person_id(platform, user_id)
 
-        streams = await QueryBuilder(self._ChatStreams).filter(
-            person_id=person_id
-        ).order_by("-last_active_time").all()
+        streams = await (
+            QueryBuilder(self._ChatStreams)
+            .filter(person_id=person_id)
+            .order_by("-last_active_time")
+            .all()
+        )
 
-        return streams
+        return cast(list["ChatStreams"], streams)
 
     async def get_user_recent_messages(
         self,
@@ -138,11 +141,15 @@ class UserQueryHelper:
         """
         person_id = self.generate_person_id(platform, user_id)
 
-        messages = await QueryBuilder(self._Messages).filter(
-            person_id=person_id
-        ).order_by("-time").limit(limit).all()
+        messages = await (
+            QueryBuilder(self._Messages)
+            .filter(person_id=person_id)
+            .order_by("-time")
+            .limit(limit)
+            .all()
+        )
 
-        return messages
+        return cast(list["Messages"], messages)
 
     async def enrich_message_with_person_info(
         self,
@@ -235,8 +242,11 @@ class UserQueryHelper:
             logger.warning(f"用户不存在：{person_id}")
             return None
 
+        # attitude 可能为 None（取默认中性值 50）
+        current_attitude = person.attitude if person.attitude is not None else 50
+
         # 限制态度评分在 0-100 范围内
-        new_attitude = max(0, min(100, person.attitude + attitude_delta))
+        new_attitude = max(0, min(100, current_attitude + attitude_delta))
 
         await self.person_crud.update(
             person.id,
@@ -247,7 +257,7 @@ class UserQueryHelper:
         )
 
         logger.info(
-            f"更新用户态度：{person_id} {person.attitude} -> {new_attitude}"
+            f"更新用户态度：{person_id} {current_attitude} -> {new_attitude}"
         )
         return new_attitude
 
