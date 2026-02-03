@@ -195,7 +195,29 @@ class CommandManager:
         if not signature:
             return False, "命令未注册"
 
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        # ========== 权限检查 ==========
+        from src.core.managers.permission_manager import get_permission_manager
+
+        perm_manager = get_permission_manager()
+        person_id = perm_manager.generate_person_id(
+            message.platform, message.sender_id
+        )
+
+        # 检查用户是否有权限执行该命令
+        has_permission, perm_reason = await perm_manager.check_command_permission(
+            person_id=person_id,
+            command_class=command_cls,
+            command_signature=signature,
+        )
+
+        if not has_permission:
+            logger.warning(
+                f"权限拒绝: user={person_id}, command={command_path}, reason={perm_reason}"
+            )
+            return False, f"权限不足：{perm_reason}"
+
+        # ========== 命令执行 ==========
+        from src.core.managers.plugin_manager import get_plugin_manager
         from src.core.components.types import parse_signature
 
         sig_info = parse_signature(signature)
@@ -232,7 +254,7 @@ class CommandManager:
             return f"命令未找到: {signature}"
 
         # 获取 plugin 实例以创建临时 Command 实例
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        from src.core.managers.plugin_manager import get_plugin_manager
         from src.core.components.types import parse_signature
 
         sig_info = parse_signature(signature)

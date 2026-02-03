@@ -102,7 +102,7 @@ class ServiceManager:
         if not sig_info:
             return None
 
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        from src.core.managers.plugin_manager import get_plugin_manager
 
         plugin_manager = get_plugin_manager()
         plugin = plugin_manager.get_plugin(sig_info["plugin_name"])

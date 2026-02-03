@@ -22,7 +22,7 @@ logger = get_logger("plugin_loader")
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
-    from src.core.components.managers.plugin_manager import PluginManager
+    from src.core.managers.plugin_manager import PluginManager
 
 # 全局插件注册表
 _plugin_registry: dict[str, type["BasePlugin"]] = {}
@@ -405,7 +405,7 @@ class PluginLoader:
         plugin_manager: "PluginManager | None" = None,
     ) -> dict[str, bool]:
         """按计划加载插件，并委托 PluginManager 执行单插件加载。"""
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        from src.core.managers.plugin_manager import get_plugin_manager
 
         manager = plugin_manager or get_plugin_manager()
         load_order, manifests_to_load = await self.plan_plugins(plugins_dir)

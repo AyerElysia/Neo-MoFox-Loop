@@ -13,7 +13,7 @@ from src.core.components.registry import get_global_registry
 if TYPE_CHECKING:
     from src.core.components.base.tool import BaseTool
     from src.core.components.base.plugin import BasePlugin
-    from src.core.components.managers.tool_manager.tool_history import ToolHistory
+    from src.core.managers.tool_manager.tool_history import ToolHistory
     from src.core.models.message import Message
 
 logger = get_logger("tool_use")

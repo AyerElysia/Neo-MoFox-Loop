@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from src.core.components.base.config import BaseConfig
 from src.kernel.config import config_section, Field, SectionBase
-from src.core.components.managers.config_manager import ConfigManager
+from src.core.managers.config_manager import ConfigManager
 
 
 class TestConfig(BaseConfig):

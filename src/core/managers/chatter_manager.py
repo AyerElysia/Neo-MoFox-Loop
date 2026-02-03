@@ -112,7 +112,7 @@ class ChatterManager:
 
         # 解析签名获取 plugin_name
         from src.core.components.types import parse_signature
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        from src.core.managers.plugin_manager import get_plugin_manager
 
         sig_info = parse_signature(signature)
         plugin_manager = get_plugin_manager()

@@ -1,8 +1,6 @@
 """Chat/stream related models.
 
 本模块提供聊天流相关的数据模型，包括 StreamContext 和 ChatStream 类。
-参考 old/common/data_models/message_manager_data_model.py 和 old/chat/message_receive/chat_stream.py 实现。
-简化版，移除数据库相关功能，保留核心上下文管理。
 """
 
 import hashlib
@@ -38,7 +36,6 @@ class StreamContext:
 
     stream_id: str
     chat_type: str = "private"  # private/group/discuss
-    chat_mode: str = "focus"  # focus/normal/proactive/priority
     max_context_size: int = 100
     unread_messages: list["Message"] = field(default_factory=list)
     history_messages: list["Message"] = field(default_factory=list)
@@ -50,32 +47,12 @@ class StreamContext:
     # 当前消息
     current_message: "Message | None" = None
     triggering_user_id: str | None = None
-    is_replying: bool = False
     processing_message_id: str | None = None
 
     # 消息缓存系统
     message_cache: deque["Message"] = field(default_factory=deque)
     is_cache_enabled: bool = False
 
-    # 统计信息
-    created_time: float = field(default_factory=time.time)
-    last_access_time: float = field(default_factory=time.time)
-    access_count: int = 0
-    total_messages: int = 0
-
-    def set_current_message(self, message: "Message") -> None:
-        """设置当前消息。
-
-        Args:
-            message: 消息对象
-        """
-        self.current_message = message
-        self._update_access_stats()
-
-    def _update_access_stats(self) -> None:
-        """更新访问统计信息。"""
-        self.last_access_time = time.time()
-        self.access_count += 1
 
     def add_unread_message(self, message: "Message") -> None:
         """添加未读消息。
@@ -84,8 +61,6 @@ class StreamContext:
             message: 消息对象
         """
         self.unread_messages.append(message)
-        self.total_messages += 1
-        self._update_access_stats()
 
     def add_history_message(self, message: "Message") -> None:
         """添加历史消息。
@@ -97,7 +72,6 @@ class StreamContext:
         # 限制历史消息大小
         if len(self.history_messages) > self.max_context_size:
             self.history_messages = self.history_messages[-self.max_context_size :]
-        self._update_access_stats()
 
 
 class ChatStream:
@@ -126,25 +100,25 @@ class ChatStream:
         self,
         stream_id: str,
         platform: str = "",
-        message: "Message | None" = None,
+        chat_type: str = "private",
     ) -> None:
         """初始化聊天流。
 
         Args:
             stream_id: 聊天流唯一标识符
             platform: 平台标识
-            message: 初始消息
+            chat_type: 聊天类型（private/group/discuss）
         """
         self.stream_id = stream_id
         self.platform = platform
-        self.message = message
+        self.chat_type = chat_type
         self.create_time = time.time()
         self.last_active_time = time.time()
 
         # 初始化 StreamContext
         self.context: StreamContext = StreamContext(
             stream_id=stream_id,
-            chat_type="group" if message and message.chat_type == "group" else "private",
+            chat_type=chat_type,
         )
 
     def update_active_time(self) -> None:
@@ -155,11 +129,11 @@ class ChatStream:
         """获取原始的、未哈希的聊天流ID字符串。
 
         Returns:
-            str: 原始 ID 字符串，格式为 "platform:id:type"
+            str: 原始 ID 字符串，格式为 "platform:stream_id:type"
         """
         # 从 stream_id 反向推导不太可能，返回哈希值
         # 实际使用时应该在外部保存原始 ID
-        return f"{self.platform}:{self.stream_id}"
+        return f"{self.platform}:{self.stream_id}:{self.chat_type}"
 
     async def set_context(self, message: "Message") -> None:
         """设置聊天消息上下文。
@@ -168,7 +142,7 @@ class ChatStream:
             message: 消息对象
         """
         self.message = message
-        self.context.set_current_message(message)
+        self.context.current_message = message
         self.update_active_time()
 
     @staticmethod

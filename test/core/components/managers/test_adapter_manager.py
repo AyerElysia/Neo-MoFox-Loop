@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.core.components.managers.adapter_manager import (
+from src.core.managers.adapter_manager import (
     AdapterManager,
     get_adapter_manager,
     reset_adapter_manager,
@@ -29,8 +29,8 @@ class TestAdapterManager:
         assert manager.list_active_adapters() == []
         assert manager.get_all_adapters() == {}
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
-    @patch('src.core.components.managers.adapter_manager.get_plugin_manager')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_plugin_manager')
     async def test_start_adapter_success(self, mock_plugin_manager, mock_registry) -> None:
         """Test successful adapter start."""
         # Setup mocks
@@ -53,7 +53,7 @@ class TestAdapterManager:
         assert "test_plugin:adapter:qq" in manager._active_adapters
         mock_adapter.start.assert_called_once()
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
     async def test_start_adapter_already_started(self, mock_registry) -> None:
         """Test starting an adapter that's already started."""
         manager = AdapterManager()
@@ -63,7 +63,7 @@ class TestAdapterManager:
 
         assert result is True
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
     async def test_start_adapter_not_found(self, mock_registry) -> None:
         """Test starting an adapter that doesn't exist in registry."""
         mock_registry.get.return_value = None
@@ -73,8 +73,8 @@ class TestAdapterManager:
 
         assert result is False
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
-    @patch('src.core.components.managers.adapter_manager.get_plugin_manager')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_plugin_manager')
     async def test_start_adapter_instantiation_fails(self, mock_plugin_manager, mock_registry) -> None:
         """Test adapter instantiation failure."""
         # Setup mocks
@@ -91,8 +91,8 @@ class TestAdapterManager:
 
         assert result is False
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
-    @patch('src.core.components.managers.adapter_manager.get_plugin_manager')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_plugin_manager')
     async def test_start_adapter_start_fails(self, mock_plugin_manager, mock_registry) -> None:
         """Test adapter start failure."""
         # Setup mocks
@@ -143,8 +143,8 @@ class TestAdapterManager:
         # Adapter should still be in active adapters since stop failed
         assert "test_plugin:adapter:qq" in manager._active_adapters
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
-    @patch('src.core.components.managers.adapter_manager.get_plugin_manager')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_plugin_manager')
     async def test_restart_adapter_success(self, mock_plugin_manager, mock_registry) -> None:
         """Test successful adapter restart."""
         # Setup mocks
@@ -181,8 +181,8 @@ class TestAdapterManager:
 
         assert result is False
 
-    @patch('src.core.components.managers.adapter_manager.get_global_registry')
-    @patch('src.core.components.managers.adapter_manager.get_plugin_manager')
+    @patch('src.core.managers.adapter_manager.get_global_registry')
+    @patch('src.core.managers.adapter_manager.get_plugin_manager')
     async def test_restart_adapter_stop_fails(self, mock_plugin_manager, mock_registry) -> None:
         """Test restart when stop fails."""
         # Setup mocks

@@ -60,7 +60,7 @@ class CollectionManager:
 
         # 解析签名获取 plugin_name
         sig_info = parse_signature(signature)
-        from src.core.components.managers.plugin_manager import get_plugin_manager
+        from src.core.managers.plugin_manager import get_plugin_manager
         plugin_manager = get_plugin_manager()
         plugin = plugin_manager.get_plugin(sig_info["plugin_name"])
 

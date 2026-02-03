@@ -13,10 +13,7 @@ from src.kernel.logger import get_logger
 from src.core.components.base.event_handler import BaseEventHandler
 from src.core.components.types import EventType
 
-
-
 logger = get_logger("event_manager")
-
 
 class EventManager:
     """事件管理器。
@@ -83,7 +80,7 @@ class EventManager:
             event_handler_classes = registry.get_by_type(ComponentType.EVENT_HANDLER)
 
             # 需要从 plugin manager 获取实例化的插件，然后实例化事件处理器
-            from src.core.components.managers.plugin_manager import get_plugin_manager
+            from src.core.managers.plugin_manager import get_plugin_manager
             plugin_manager = get_plugin_manager()
 
             for signature, handler_cls in event_handler_classes.items():

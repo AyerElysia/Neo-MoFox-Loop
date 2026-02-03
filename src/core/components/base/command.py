@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
-from src.core.components.types import ChatType
+from src.core.components.types import ChatType, PermissionLevel
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
@@ -42,6 +42,7 @@ class BaseCommand(ABC):
     Class Attributes:
         command_name: 命令名称
         command_description: 命令描述
+        permission_level: 权限级别（默认 USER）
         associated_platforms: 关联的平台列表
         chat_type: 支持的聊天类型
         command_prefix: 命令前缀（如 "/"、"!"）
@@ -63,6 +64,9 @@ class BaseCommand(ABC):
     # 命令元数据
     command_name: str = ""
     command_description: str = ""
+
+    # 权限级别（默认为 USER）
+    permission_level: PermissionLevel = PermissionLevel.USER
 
     associated_platforms: list[str] = []
     chat_type: ChatType = ChatType.ALL
