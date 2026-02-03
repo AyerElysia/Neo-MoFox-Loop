@@ -13,7 +13,7 @@ from src.core.components.utils import parse_function_signature
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
-    from src.core.models.sql_alchemy import ChatStreams
+    from src.core.models.stream import ChatStream
     from src.kernel.llm.payload.tooling import LLMUsable
 
 
@@ -58,7 +58,7 @@ class BaseAction(ABC, LLMUsable):
     # 组件级依赖（精确到组件签名）
     dependencies: list[str] = []  # 例如 ["other_plugin:tool:calculator"]
 
-    def __init__(self, chat_stream: "ChatStreams", plugin: "BasePlugin") -> None:
+    def __init__(self, chat_stream: "ChatStream", plugin: "BasePlugin") -> None:
         """初始化动作组件。
 
         Args:

@@ -5,10 +5,12 @@ Action 是"主动的响应"，通过 LLM Tool Calling 调用。
 管理器维护 Action 组件的全局集合，并根据聊天上下文过滤可用的 Action。
 """
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.kernel.logger import get_logger
 from src.kernel.llm.payload.tooling import LLMUsable
+from src.kernel.concurrency import get_task_manager
 
 from src.core.components.registry import get_global_registry
 from src.core.components.types import ChatType, ComponentType
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
     from src.core.components.base.action import BaseAction
     from src.core.components.base.plugin import BasePlugin
     from src.core.models.message import Message
+    from src.core.models.stream import ChatStream, StreamContext
 
 
 logger = get_logger("action_manager")
@@ -283,6 +286,201 @@ class ActionManager:
             self._schema_cache.pop(signature, None)
         else:
             self._schema_cache.clear()
+
+    async def modify_actions(
+        self,
+        chat_stream: "ChatStream",
+        message_content: str = "",
+    ) -> list[str]:
+        """修改动作列表，根据上下文过滤和激活动作。
+
+        这是主方法，协调多个阶段的动作过滤和激活判定：
+        1. 检查动作的关联类型（associated_types）
+        2. 调用 go_activate 方法进行激活判定
+
+        Args:
+            chat_stream: 聊天流实例
+            message_content: 当前消息内容，用于激活判定
+
+        Returns:
+            list[str]: 最终可用的动作签名列表
+
+        Examples:
+            >>> available_actions = await manager.modify_actions(
+            ...     chat_stream=stream,
+            ...     message_content="你好"
+            ... )
+        """
+        logger.debug(
+            f"[{chat_stream.stream_id}] 开始动作修改流程"
+        )
+
+        # 获取所有动作类
+        all_actions = self.get_all_actions()
+        removals: list[tuple[str, str]] = []
+
+        # 第二阶段：检查关联类型
+        type_mismatched = self._check_action_associated_types(
+            all_actions, chat_stream.context
+        )
+        removals.extend(type_mismatched)
+
+        # 第三阶段：激活判定
+        deactivated = await self._get_deactivated_actions_by_type(
+            all_actions, chat_stream, message_content
+        )
+        removals.extend(deactivated)
+
+        # 构建最终可用动作列表
+        available_actions = []
+        for signature in all_actions.keys():
+            if not any(r[0] == signature for r in removals):
+                available_actions.append(signature)
+
+        # 日志记录
+        if removals:
+            removals_summary = " | ".join([f"{name}({reason})" for name, reason in removals])
+            logger.info(f"[{chat_stream.stream_id}] 移除动作: {removals_summary}")
+
+        available_text = "、".join(available_actions) if available_actions else "无"
+        logger.info(f"[{chat_stream.stream_id}] 可用动作: {available_text}")
+
+        return available_actions
+
+    def _check_action_associated_types(
+        self,
+        all_actions: dict[str, type["BaseAction"]],
+        chat_context: "StreamContext",
+    ) -> list[tuple[str, str]]:
+        """检查动作的关联类型。
+
+        Args:
+            all_actions: 所有动作类字典
+            chat_context: 聊天流上下文
+
+        Returns:
+            list[tuple[str, str]]: 需要移除的 (动作签名, 原因) 列表
+
+        Examples:
+            >>> removals = manager._check_action_associated_types(
+            ...     actions, context
+            ... )
+        """
+        type_mismatched: list[tuple[str, str]] = []
+
+        for signature, action_cls in all_actions.items():
+            if action_cls.associated_types:
+                if not chat_context.check_types(action_cls.associated_types):
+                    types_str = ", ".join(action_cls.associated_types)
+                    reason = f"适配器不支持（需要: {types_str}）"
+                    type_mismatched.append((signature, reason))
+                    logger.debug(
+                        f"[移除动作] {signature}：{reason}"
+                    )
+
+        return type_mismatched
+
+    async def _get_deactivated_actions_by_type(
+        self,
+        actions_dict: dict[str, type["BaseAction"]],
+        chat_stream: "ChatStream",
+        message_content: str = "",
+    ) -> list[tuple[str, str]]:
+        """根据激活类型判定返回需要停用的动作列表。
+
+        并行调用每个 Action 的 go_activate 方法进行激活判定。
+
+        Args:
+            actions_dict: 动作字典
+            chat_stream: 聊天流实例
+            message_content: 消息内容
+
+        Returns:
+            list[tuple[str, str]]: 需要停用的 (动作签名, 原因) 列表
+
+        Examples:
+            >>> deactivated = await manager._get_deactivated_actions_by_type(
+            ...     actions, stream, "你好"
+            ... )
+        """
+        from src.core.managers.plugin_manager import get_plugin_manager
+
+        deactivated_actions: list[tuple[str, str]] = []
+        plugin_manager = get_plugin_manager()
+
+        # 创建并行任务列表
+        tasks = []
+        signatures = []
+
+        for signature, action_cls in actions_dict.items():
+            # 从签名中提取 plugin_name（格式：plugin_name:component_type:component_name）
+            parts = signature.split(":")
+            if len(parts) < 3:
+                logger.warning(f"无效的 Action 签名格式: {signature}，跳过")
+                continue
+
+            plugin_name = parts[0]
+
+            # 获取真实的 plugin 实例
+            plugin = plugin_manager.get_plugin(plugin_name)
+            if not plugin:
+                logger.warning(f"未找到 Plugin 实例: {plugin_name}，跳过 Action: {signature}")
+                deactivated_actions.append((signature, f"未找到 Plugin 实例: {plugin_name}"))
+                continue
+
+            # 创建 Action 实例
+            try:
+                action_instance = action_cls(
+                    chat_stream=chat_stream,
+                    plugin=plugin
+                )
+                # 设置消息内容供 go_activate 使用
+                action_instance._last_message = message_content
+
+                # 创建 go_activate 任务
+                task = action_instance.go_activate()
+                tasks.append(task)
+                signatures.append(signature)
+
+            except Exception as e:
+                logger.error(f"创建 Action 实例 {signature} 失败: {e}")
+                deactivated_actions.append((signature, f"创建实例失败: {e}"))
+
+        # 并行执行所有激活判断
+        if tasks:
+            logger.debug(
+                f"[{chat_stream.stream_id}] 并行执行激活判断，任务数: {len(tasks)}"
+            )
+            try:
+                results = await get_task_manager().gather(*tasks, return_exceptions=True)
+
+                # 处理结果
+                for signature, result in zip(signatures, results, strict=False):
+                    if isinstance(result, Exception):
+                        logger.error(
+                            f"[{chat_stream.stream_id}] 激活判断 {signature} 时出错: {result}"
+                        )
+                        deactivated_actions.append((signature, f"激活判断出错: {result}"))
+                    elif not result:
+                        # go_activate 返回 False，不激活
+                        deactivated_actions.append((signature, "go_activate 返回 False"))
+                        logger.debug(
+                            f"[{chat_stream.stream_id}] 未激活动作: {signature}"
+                        )
+                    else:
+                        # go_activate 返回 True，激活
+                        logger.debug(
+                            f"[{chat_stream.stream_id}] 激活动作: {signature}"
+                        )
+
+            except Exception as e:
+                logger.error(f"[{chat_stream.stream_id}] 并行激活判断失败: {e}")
+                # 如果并行执行失败，将所有动作标记为不激活
+                deactivated_actions.extend(
+                    (sig, f"并行判断失败: {e}") for sig in signatures
+                )
+
+        return deactivated_actions
 
     def _build_signature(self, action_cls: type["BaseAction"]) -> str:
         """构建 Action 组件签名。

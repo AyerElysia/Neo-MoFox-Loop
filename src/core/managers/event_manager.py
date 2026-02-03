@@ -14,6 +14,7 @@ from src.kernel.event import get_event_bus, EventDecision
 
 from src.core.components.base.event_handler import BaseEventHandler
 from src.core.components.types import EventType
+from src.kernel.concurrency import get_task_manager
 
 logger = get_logger("event_manager")
 
@@ -272,7 +273,7 @@ class EventManager:
 
                     logger.debug(f"已注销事件处理器: {signature}")
 
-        asyncio.create_task(_unregister())
+        get_task_manager().create_task(_unregister())
 
     def get_handlers_for_event(self, event: EventType | str) -> List[Tuple[BaseEventHandler, str]]:
         """获取指定事件的所有处理器。

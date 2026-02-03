@@ -71,6 +71,49 @@ class StreamContext:
         if len(self.history_messages) > self.max_context_size:
             self.history_messages = self.history_messages[-self.max_context_size :]
 
+    def check_types(self, types: list[str]) -> bool:
+        """检查当前消息是否支持指定的类型。
+
+        根据 Message 的 extra 字段中的 format_info.accept_format 检查类型支持。
+
+        Args:
+            types: 需要检查的消息类型列表，如 ["text", "image", "emoji"]
+
+        Returns:
+            bool: 如果消息支持所有指定的类型则返回 True，否则返回 False
+
+        Examples:
+            >>> context.check_types(["text", "image"])
+            True
+        """
+        if not self.current_message:
+            return False
+
+        if not types:
+            # 如果没有指定类型要求，默认为支持
+            return True
+
+        # 从 extra 字段中获取 format_info
+        format_info = self.current_message.extra.get("format_info", {})
+        accept_format = format_info.get("accept_format", [])
+
+        # 确保 accept_format 是列表类型
+        if isinstance(accept_format, str):
+            accept_format = [accept_format]
+        elif not isinstance(accept_format, list):
+            accept_format = list(accept_format) if hasattr(accept_format, "__iter__") else []
+
+        # 如果没有 accept_format，默认支持所有类型
+        if not accept_format:
+            return True
+
+        # 检查所有请求的类型是否都被支持
+        for requested_type in types:
+            if requested_type not in accept_format:
+                return False
+
+        return True
+
 
 class ChatStream:
     """聊天流对象，存储一个完整的聊天上下文。
