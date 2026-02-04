@@ -272,9 +272,9 @@ async def test_chatter_get_llm_usables_respects_state():
     state_manager.set_state("test_plugin:collection:c1", ComponentState.ACTIVE)
 
     # 需要 signature 才会被识别为 LLMUsable
-    A1.__signature__ = "test_plugin:action:a1"  # type: ignore[attr-defined]
-    T1.__signature__ = "test_plugin:tool:t1"  # type: ignore[attr-defined]
-    C1.__signature__ = "test_plugin:collection:c1"  # type: ignore[attr-defined]
+    A1._signature_ = "test_plugin:action:a1"  # type: ignore[attr-defined]
+    T1._signature_ = "test_plugin:tool:t1"  # type: ignore[attr-defined]
+    C1._signature_ = "test_plugin:collection:c1"  # type: ignore[attr-defined]
 
     # 门控：先把 c1 置为“未解包默认不可用”
     manager = CollectionManager()

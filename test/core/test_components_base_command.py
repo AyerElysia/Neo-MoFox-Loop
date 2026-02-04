@@ -92,7 +92,7 @@ class TestBaseCommand:
         command = ConcreteCommand(mock_plugin)
         assert command.get_signature() is None
 
-        ConcreteCommand.plugin_name = "my_plugin"
+        ConcreteCommand._plugin_ = "my_plugin"
         command2 = ConcreteCommand(mock_plugin)
         assert command2.get_signature() == "my_plugin:command:test"
 

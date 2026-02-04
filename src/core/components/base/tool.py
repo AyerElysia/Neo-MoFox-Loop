@@ -41,9 +41,8 @@ class BaseTool(ABC, LLMUsable):
         ...         except Exception as e:
         ...         return False, f"计算错误: {e}"
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 工具元数据
     tool_name: str = ""
@@ -67,16 +66,20 @@ class BaseTool(ABC, LLMUsable):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取工具组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:tool:tool_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = CalculatorTool.get_signature()
+            >>> "my_plugin:tool:calculator"
         """
-        return f"{cls.plugin_name}:tool:{cls.tool_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.tool_name:  # type: ignore
+            return f"{cls._plugin_}:tool:{cls.tool_name}"  # type: ignore
+        return None
     
     @abstractmethod
     async def execute(

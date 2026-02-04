@@ -40,43 +40,51 @@ class BaseConfig(ABC, ConfigBase):
         ...
         ...     inner: InnerSection = Field(default_factory=InnerSection)
     """
-
-    # 所属插件名称（如被注入，可用于默认路径等场景）
-    plugin_name: ClassVar[str] = "unknown_plugin"
+    _plugin_: ClassVar[str]
+    _signature_: ClassVar[str]
 
     # 这些属性应由子类覆盖
     config_name: str = "config"
     config_description: str = ""
 
     @classmethod
-    def get_default_path(cls) -> Path:
+    def get_default_path(cls) -> Path | None:
         """获取此插件的默认配置文件路径。
 
         基于插件模块位置构造路径。
         默认格式：config/plugins/{plugin_name}/config.toml
 
         Returns:
-            Path: 配置文件的默认路径
+            Path | None: 配置文件的默认路径，如果插件名称未注入则返回 None
 
         Examples:
             >>> path = MyPluginConfig.get_default_path()
             >>> Path("config/plugins/my_plugin/config.toml")
         """
-
-        return Path("config") / "plugins" / cls.plugin_name / f"{cls.config_name}.toml"
+        # Check for _plugin_ (set by plugin manager) or plugin_name (class attribute)
+        plugin_name = getattr(cls, "_plugin_", None) or getattr(cls, "plugin_name", None)
+        if plugin_name:
+            return Path("config") / "plugins" / plugin_name / f"{cls.config_name}.toml"
+        return None
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取配置组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:config:config_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyPluginConfig.get_signature()
+            >>> "my_plugin:config:config"
         """
-        return f"{cls.plugin_name}:config:{cls.config_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        # Check for _plugin_ (set by plugin manager) or plugin_name (class attribute)
+        plugin_name = getattr(cls, "_plugin_", None) or getattr(cls, "plugin_name", None)
+        if plugin_name and cls.config_name:
+            return f"{plugin_name}:config:{cls.config_name}"
+        return None
 
     @classmethod
     def generate_default(cls, path: str | Path | None = None) -> None:
@@ -108,18 +116,19 @@ class BaseConfig(ABC, ConfigBase):
             path = Path(path)
 
         # 创建父目录
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 获取默认配置数据
-        default_data = cls.default()
+            # 获取默认配置数据
+            default_data = cls.default()
 
-        # 使用签名渲染为 TOML
-        from src.kernel.config.core import _render_toml_with_signature
+            # 使用签名渲染为 TOML
+            from src.kernel.config.core import _render_toml_with_signature
 
-        toml_content = _render_toml_with_signature(cls, default_data)
+            toml_content = _render_toml_with_signature(cls, default_data)
 
-        # 写入文件
-        path.write_text(toml_content, encoding="utf-8")
+            # 写入文件
+            path.write_text(toml_content, encoding="utf-8")
 
     @classmethod
     def load_for_plugin(

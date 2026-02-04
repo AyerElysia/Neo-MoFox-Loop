@@ -72,11 +72,11 @@ class TestBaseAdapter:
 
     def test_get_signature_with_plugin_name(self):
         """测试设置插件名称后获取签名。"""
-        TestAdapter.plugin_name = "test_plugin"
+        TestAdapter._plugin_ = "test_plugin"
         signature = TestAdapter.get_signature()
         assert signature == "test_plugin:adapter:test_adapter"
         # 重置
-        TestAdapter.plugin_name = "unknown_plugin"
+        TestAdapter._plugin_ = "unknown_plugin"
 
     def test_adapter_initialization(self):
         """测试适配器初始化。"""

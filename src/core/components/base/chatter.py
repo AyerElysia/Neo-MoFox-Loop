@@ -90,9 +90,8 @@ class BaseChatter(ABC):
         ...         # 执行逻辑...
         ...         yield Success("完成")
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 聊天器元数据
     chatter_name: str = ""
@@ -121,16 +120,20 @@ class BaseChatter(ABC):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取聊天器组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:chatter:chatter_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyChatter.get_signature()
+            >>> "my_plugin:chatter:my_chatter"
         """
-        return f"{cls.plugin_name}:chatter:{cls.chatter_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.chatter_name:  # type: ignore
+            return f"{cls._plugin_}:chatter:{cls.chatter_name}"  # type: ignore
+        return None
     
     @abstractmethod
     async def execute(
@@ -187,7 +190,7 @@ class BaseChatter(ABC):
 
         for component_cls in components:
             # 检查是否是 LLMUsable（Action、Tool、Collection）
-            sig = getattr(component_cls, "__signature__", None)
+            sig = getattr(component_cls, "_signature_", None)
             if sig:
                 # 仅返回“可用”的组件
                 if state_manager.get_state(sig) != ComponentState.ACTIVE:

@@ -33,10 +33,13 @@ class TestBaseEventHandler:
     def reset_class_attributes(self):
         """在每个测试前重置类属性。"""
         # 备份原始值
-        original_plugin_name = ConcreteEventHandler.plugin_name
+        original_plugin_name = getattr(ConcreteEventHandler, "_plugin_", None)
         yield
         # 恢复原始值
-        ConcreteEventHandler.plugin_name = original_plugin_name
+        if original_plugin_name:
+            ConcreteEventHandler._plugin_ = original_plugin_name
+        elif hasattr(ConcreteEventHandler, "_plugin_"):
+            delattr(ConcreteEventHandler, "_plugin_")
 
     def test_event_handler_initialization(self, mock_plugin):
         """测试 EventHandler 初始化。"""
@@ -53,7 +56,7 @@ class TestBaseEventHandler:
         handler = ConcreteEventHandler(mock_plugin)
         assert handler.get_signature() is None
 
-        ConcreteEventHandler.plugin_name = "my_plugin"
+        ConcreteEventHandler._plugin_ = "my_plugin"
         handler2 = ConcreteEventHandler(mock_plugin)
         assert handler2.get_signature() == "my_plugin:event_handler:test_handler"
 

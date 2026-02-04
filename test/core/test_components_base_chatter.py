@@ -80,7 +80,7 @@ class TestBaseChatter:
         chatter = ConcreteChatter("stream_123", mock_plugin)
         assert chatter.get_signature() is None
 
-        ConcreteChatter.plugin_name = "my_plugin"
+        ConcreteChatter._plugin_ = "my_plugin"
         chatter2 = ConcreteChatter("stream_456", mock_plugin)
         assert chatter2.get_signature() == "my_plugin:chatter:test_chatter"
 

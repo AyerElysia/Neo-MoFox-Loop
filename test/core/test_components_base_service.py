@@ -31,7 +31,7 @@ class TestBaseService:
         service = ConcreteService(mock_plugin)
         assert service.get_signature() is None
 
-        ConcreteService.plugin_name = "my_plugin"
+        ConcreteService._plugin_ = "my_plugin"
         service2 = ConcreteService(mock_plugin)
         assert service2.get_signature() == "my_plugin:service:test_service"
 

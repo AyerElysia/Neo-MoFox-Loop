@@ -38,9 +38,8 @@ class BaseEventHandler(ABC):
         ...         # 处理事件
         ...         return True, False, "处理完成"
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 处理器元数据
     handler_name: str = ""
@@ -69,16 +68,20 @@ class BaseEventHandler(ABC):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取事件处理器组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:event_handler:handler_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyEventHandler.get_signature()
+            >>> "my_plugin:event_handler:my_handler"
         """
-        return f"{cls.plugin_name}:event_handler:{cls.handler_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.handler_name:  # type: ignore
+            return f"{cls._plugin_}:event_handler:{cls.handler_name}"  # type: ignore
+        return None
     
     @abstractmethod
     async def execute(

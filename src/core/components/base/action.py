@@ -45,9 +45,8 @@ class BaseAction(ABC, LLMUsable):
         ...         # 实现逻辑
         ...         return True, "发送成功"
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 动作元数据
     action_name: str = ""
@@ -85,7 +84,11 @@ class BaseAction(ABC, LLMUsable):
             >>> signature = SendEmoji.get_signature()
             >>> "my_plugin:action:send_emoji"
         """
-        return f"{cls.plugin_name}:action:{cls.action_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:
+            return cls._signature_
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.action_name:
+            return f"{cls._plugin_}:action:{cls.action_name}"
+        return None
     
     @abstractmethod
     async def execute(

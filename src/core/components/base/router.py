@@ -40,9 +40,8 @@ class BaseRouter(ABC):
         ...         async def hello():
         ...             return {"message": "Hello"}
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 路由元数据
     router_name: str = ""
@@ -95,7 +94,11 @@ class BaseRouter(ABC):
             >>> signature = SendEmoji.get_signature()
             >>> "my_plugin:action:send_emoji"
         """
-        return f"{cls.plugin_name}:router:{cls.router_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.router_name:  # type: ignore
+            return f"{cls._plugin_}:router:{cls.router_name}"  # type: ignore
+        return None
     
     @abstractmethod
     def register_endpoints(self) -> None:

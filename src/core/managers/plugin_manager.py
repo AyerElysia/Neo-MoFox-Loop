@@ -452,16 +452,13 @@ class PluginManager:
                 continue
 
             try:
-                # 注入所属插件名称
-                component_cls.plugin_name = plugin_name
-
                 # 注册到全局注册表
                 registry.register(component_cls, signature, dependencies)
                 logger.debug(f"注册组件: {signature}")
 
                 # 设置组件元数据属性，供其他管理器反向查找
-                component_cls.__signature__ = signature
-                component_cls.__plugin__ = plugin_name
+                component_cls._signature_ = signature
+                component_cls._plugin_ = plugin_name
 
                 # 设置组件状态
                 await state_manager.set_state_async(signature, ComponentState.ACTIVE)

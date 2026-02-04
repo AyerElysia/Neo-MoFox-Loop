@@ -33,10 +33,13 @@ class TestBaseCollection:
     def reset_class_attributes(self):
         """在每个测试前重置类属性。"""
         # 备份原始值
-        original_plugin_name = ConcreteCollection.plugin_name
+        original_plugin_name = getattr(ConcreteCollection, "_plugin_", None)
         yield
         # 恢复原始值
-        ConcreteCollection.plugin_name = original_plugin_name
+        if original_plugin_name:
+            ConcreteCollection._plugin_ = original_plugin_name
+        elif hasattr(ConcreteCollection, "_plugin_"):
+            delattr(ConcreteCollection, "_plugin_")
 
     def test_collection_initialization(self, mock_plugin):
         """测试 Collection 初始化。"""
@@ -50,7 +53,7 @@ class TestBaseCollection:
         collection = ConcreteCollection(mock_plugin)
         assert collection.get_signature() is None
 
-        ConcreteCollection.plugin_name = "my_plugin"
+        ConcreteCollection._plugin_ = "my_plugin"
         collection2 = ConcreteCollection(mock_plugin)
         assert collection2.get_signature() == "my_plugin:collection:test_collection"
 
@@ -86,12 +89,12 @@ class TestBaseCollection:
         # 设置 mock
         mock_manager = MagicMock()
         mock_manager.unpack_collection = AsyncMock(return_value=[
-            MagicMock(__signature__="plugin1:action:action1"),
-            MagicMock(__signature__="plugin1:tool:tool1"),
+            MagicMock(_signature_="plugin1:action:action1"),
+            MagicMock(_signature_="plugin1:tool:tool1"),
         ])
         mock_get_manager.return_value = mock_manager
 
-        ConcreteCollection.plugin_name = "my_plugin"
+        ConcreteCollection._plugin_ = "my_plugin"
         collection = ConcreteCollection(mock_plugin)
 
         success, result = asyncio.run(collection.execute("stream_123"))
@@ -114,7 +117,7 @@ class TestBaseCollection:
         ])
         mock_get_manager.return_value = mock_manager
 
-        ConcreteCollection.plugin_name = "my_plugin"
+        ConcreteCollection._plugin_ = "my_plugin"
         collection = ConcreteCollection(mock_plugin)
 
         success, result = asyncio.run(collection.execute("stream_123"))

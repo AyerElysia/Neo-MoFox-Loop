@@ -31,17 +31,19 @@ class TestBaseAction:
     def reset_class_attributes(self):
         """在每个测试前重置类属性。"""
         # 备份原始值
-        original_plugin_name = ConcreteAction.plugin_name
+        original_plugin_name = getattr(ConcreteAction, "_plugin_", None)
         yield
         # 恢复原始值
-        ConcreteAction.plugin_name = original_plugin_name
+        if original_plugin_name:
+            ConcreteAction._plugin_ = original_plugin_name
+        elif hasattr(ConcreteAction, "_plugin_"):
+            delattr(ConcreteAction, "_plugin_")
 
     def test_action_initialization(self, mock_chat_stream, mock_plugin):
         """测试 Action 初始化。"""
         action = ConcreteAction(mock_chat_stream, mock_plugin)
         assert action.chat_stream == mock_chat_stream
         assert action.plugin == mock_plugin
-        assert action.plugin_name == "unknown_plugin"
         assert action.action_name == "test_action"
         assert action.action_description == "A test action"
         assert action.primary_action is False
@@ -53,7 +55,7 @@ class TestBaseAction:
         assert action.get_signature() is None
 
         # 设置 plugin_name 后应该返回签名
-        ConcreteAction.plugin_name = "my_plugin"
+        ConcreteAction._plugin_ = "my_plugin"
         action2 = ConcreteAction(mock_chat_stream, mock_plugin)
         assert action2.get_signature() == "my_plugin:action:test_action"
 

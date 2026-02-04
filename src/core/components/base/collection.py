@@ -43,9 +43,8 @@ class BaseCollection(ABC, LLMUsable):
         ...             "my_plugin:command:time_command",
         ...         ]
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 集合元数据
     collection_name: str = ""
@@ -77,7 +76,7 @@ class BaseCollection(ABC, LLMUsable):
         """
         signature = self.get_signature()
         if not signature:
-            sig = getattr(self.__class__, "__signature__", None)
+            sig = getattr(self.__class__, "_signature_", None)
             if isinstance(sig, str) and sig:
                 signature = sig
             else:
@@ -100,7 +99,7 @@ class BaseCollection(ABC, LLMUsable):
 
         component_signatures: list[str] = []
         for component_cls in unpacked:
-            sig = getattr(component_cls, "__signature__", None)
+            sig = getattr(component_cls, "_signature_", None)
             if isinstance(sig, str):
                 component_signatures.append(sig)
 
@@ -113,16 +112,20 @@ class BaseCollection(ABC, LLMUsable):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取集合组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:collection:collection_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyCollection.get_signature()
+            >>> "my_plugin:collection:my_collection"
         """
-        return f"{cls.plugin_name}:collection:{cls.collection_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.collection_name:  # type: ignore
+            return f"{cls._plugin_}:collection:{cls.collection_name}"  # type: ignore
+        return None
 
     @abstractmethod
     async def get_contents(self) -> list[str]:

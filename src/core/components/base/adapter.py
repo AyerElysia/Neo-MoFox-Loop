@@ -44,9 +44,8 @@ class BaseAdapter(AdapterBase):
         ...         # 解析平台消息并返回 MessageEnvelope
         ...         return envelope
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 适配器元数据
     adapter_name: str = "unknown_adapter"
@@ -78,16 +77,20 @@ class BaseAdapter(AdapterBase):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取适配器组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:adapter:adapter_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyAdapter.get_signature()
+            >>> "my_plugin:adapter:my_adapter"
         """
-        return f"{cls.plugin_name}:adapter:{cls.adapter_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:
+            return cls._signature_
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.adapter_name:
+            return f"{cls._plugin_}:adapter:{cls.adapter_name}"
+        return None
 
     async def start(self) -> None:
         """启动适配器。

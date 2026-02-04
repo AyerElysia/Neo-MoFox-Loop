@@ -61,9 +61,8 @@ class BaseCommand(ABC):
         ...     async def handle_get(self) -> tuple[bool, str]:
         ...         return True, "获取值"
     """
-
-    # 所属插件名称（由 PluginManager 在注册时注入）
-    plugin_name: str = "unknown_plugin"
+    _plugin_: str
+    _signature_: str
 
     # 命令元数据
     command_name: str = ""
@@ -91,16 +90,20 @@ class BaseCommand(ABC):
 
     @classmethod
     def get_signature(cls) -> str | None:
-        """获取动作组件的唯一签名。
+        """获取命令组件的唯一签名。
 
         Returns:
-            str | None: 组件签名，格式为 "plugin_name:action:action_name"，如果还未注入插件名称则返回 None
+            str | None: 组件签名，格式为 "plugin_name:command:command_name"，如果还未注入插件名称则返回 None
 
         Examples:
-            >>> signature = SendEmoji.get_signature()
-            >>> "my_plugin:action:send_emoji"
+            >>> signature = MyCommand.get_signature()
+            >>> "my_plugin:command:my_command"
         """
-        return f"{cls.plugin_name}:command:{cls.command_name}" if cls.plugin_name != "unknown_plugin" else None
+        if hasattr(cls, "_signature_") and cls._signature_:  # type: ignore
+            return cls._signature_  # type: ignore
+        if hasattr(cls, "_plugin_") and cls._plugin_ and cls.command_name:  # type: ignore
+            return f"{cls._plugin_}:command:{cls.command_name}"  # type: ignore
+        return None
 
     @classmethod
     def match(cls, parts: list[str]) -> int:

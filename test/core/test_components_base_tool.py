@@ -29,16 +29,18 @@ class TestBaseTool:
     def reset_class_attributes(self):
         """在每个测试前重置类属性。"""
         # 备份原始值
-        original_plugin_name = ConcreteTool.plugin_name
+        original_plugin_name = getattr(ConcreteTool, "_plugin_", None)
         yield
         # 恢复原始值
-        ConcreteTool.plugin_name = original_plugin_name
+        if original_plugin_name:
+            ConcreteTool._plugin_ = original_plugin_name
+        elif hasattr(ConcreteTool, "_plugin_"):
+            delattr(ConcreteTool, "_plugin_")
 
     def test_tool_initialization(self, mock_plugin):
         """测试 Tool 初始化。"""
         tool = ConcreteTool(mock_plugin)
         assert tool.plugin == mock_plugin
-        assert tool.plugin_name == "unknown_plugin"
         assert tool.tool_name == "test_tool"
         assert tool.tool_description == "A test tool"
 
@@ -49,7 +51,7 @@ class TestBaseTool:
         assert tool.get_signature() is None
 
         # 设置 plugin_name 后应该返回签名
-        ConcreteTool.plugin_name = "my_plugin"
+        ConcreteTool._plugin_ = "my_plugin"
         tool2 = ConcreteTool(mock_plugin)
         assert tool2.get_signature() == "my_plugin:tool:test_tool"
 

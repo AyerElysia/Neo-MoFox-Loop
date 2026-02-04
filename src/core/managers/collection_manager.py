@@ -366,10 +366,10 @@ class CollectionManager:
     def _get_component_signature(self, component_cls: type) -> str | None:
         """获取组件类的签名。
 
-        优化：优先使用 __signature__ 属性（O(1)），避免注册表遍历。
+        优化：优先使用 _signature_ 属性（O(1)），避免注册表遍历。
         """
-        # 优先使用 __signature__ 属性（大多数组件都有这个属性）
-        sig = getattr(component_cls, "__signature__", None)
+        # 优先使用 _signature_ 属性（大多数组件都有这个属性）
+        sig = getattr(component_cls, "_signature_", None)
         if isinstance(sig, str) and sig:
             return sig
 
