@@ -19,7 +19,6 @@ class TestAdapter(BaseAdapter):
     adapter_version = "1.0.0"
     adapter_description = "Test adapter"
     platform = "test_platform"
-    run_in_subprocess = False
 
     async def from_platform_message(self, raw: Any):
         """解析平台消息。"""
@@ -64,7 +63,6 @@ class TestBaseAdapter:
         assert TestAdapter.adapter_version == "1.0.0"
         assert TestAdapter.adapter_description == "Test adapter"
         assert TestAdapter.platform == "test_platform"
-        assert TestAdapter.run_in_subprocess is False
         assert TestAdapter.dependencies == []
 
     def test_get_signature_without_plugin_name(self):
@@ -220,29 +218,6 @@ class TestBaseAdapter:
 
         adapter.stop.assert_called_once()
         adapter.start.assert_called_once()
-
-    def test_from_process_queues(self):
-        """测试从进程队列创建适配器。"""
-        # 测试 from_process_queues 方法存在并可调用
-        # 由于 ProcessCoreSink 需要 multiprocessing.Queue，这里简化测试
-        mock_to_queue = MagicMock()
-        mock_from_queue = MagicMock()
-
-        # 验证方法可以调用（不抛出 ImportError）
-        try:
-            adapter = TestAdapter.from_process_queues(
-                to_core_queue=mock_to_queue,
-                from_core_queue=mock_from_queue,
-            )
-            # 如果成功创建，验证基本属性
-            assert adapter is not None
-        except ImportError:
-            # 如果 mofox_wire 不可用，跳过测试
-            pytest.skip("mofox_wire not available")
-        except Exception:
-            # 其他异常也可能由于 mock 限制发生
-            # 只要方法存在并可调用就通过
-            pass
 
     @pytest.mark.asyncio
     async def test_send_platform_message_not_implemented(self):

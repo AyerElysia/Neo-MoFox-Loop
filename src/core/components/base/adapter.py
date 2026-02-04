@@ -10,7 +10,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from mofox_wire import AdapterBase
-from mofox_wire import CoreSink, MessageEnvelope, ProcessCoreSink
+from mofox_wire import CoreSink, MessageEnvelope
 
 from src.kernel.concurrency import get_task_manager
 
@@ -25,7 +25,7 @@ class BaseAdapter(AdapterBase):
     相比 mofox_wire.AdapterBase，增加了以下特性：
     1. 插件生命周期管理 (on_adapter_loaded, on_adapter_unloaded)
     2. 自动重连与健康检查
-    3. 子进程启动支持
+    3. （已移除）子进程启动支持
 
     Class Attributes:
         plugin_name: 所属插件名称（由插件管理器在注册时注入，插件开发者无需填写）
@@ -33,14 +33,12 @@ class BaseAdapter(AdapterBase):
         adapter_version: 适配器版本
         adapter_description: 适配器描述
         platform: 平台标识（如 "qq", "telegram", "discord"）
-        run_in_subprocess: 是否在子进程中运行
 
     Examples:
         >>> class MyAdapter(BaseAdapter):
         ...     adapter_name = "my_adapter"
         ...     adapter_version = "1.0.0"
         ...     platform = "test"
-        ...     run_in_subprocess = False
         ...
         ...     async def from_platform_message(self, raw: Any):
         ...         # 解析平台消息并返回 MessageEnvelope
@@ -56,7 +54,6 @@ class BaseAdapter(AdapterBase):
     adapter_description: str = "无描述"
 
     platform: str = ""
-    run_in_subprocess: bool = False
 
     # 组件级依赖（精确到组件签名）
     dependencies: list[str] = []  # 例如 ["other_plugin:service:message_queue"]
@@ -91,30 +88,6 @@ class BaseAdapter(AdapterBase):
             >>> "my_plugin:action:send_emoji"
         """
         return f"{cls.plugin_name}:adapter:{cls.adapter_name}" if cls.plugin_name != "unknown_plugin" else None
-    
-    @classmethod
-    def from_process_queues(
-        cls,
-        to_core_queue: Any,
-        from_core_queue: Any,
-        plugin: "BasePlugin | None" = None,
-        **kwargs: Any,
-    ) -> "BaseAdapter":
-        """子进程入口便捷构造。
-
-        使用 multiprocessing.Queue 与核心建立 ProcessCoreSink 通讯。
-
-        Args:
-            to_core_queue: 发往核心的 multiprocessing.Queue
-            from_core_queue: 核心回传的 multiprocessing.Queue
-            plugin: 可选插件实例
-            **kwargs: 透传给适配器构造函数
-
-        Returns:
-            BaseAdapter: 适配器实例
-        """
-        sink = ProcessCoreSink(to_core_queue=to_core_queue, from_core_queue=from_core_queue)
-        return cls(core_sink=sink, plugin=plugin, **kwargs)
 
     async def start(self) -> None:
         """启动适配器。

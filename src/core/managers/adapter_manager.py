@@ -37,7 +37,8 @@ class AdapterManager:
 
     def __init__(self) -> None:
         """初始化适配器管理器。"""
-        self._active_adapters: dict[str, "BaseAdapter"] = {}
+        # 说明：子进程适配器会以代理对象形式保存，因此这里不强制 BaseAdapter 类型。
+        self._active_adapters: dict[str, object] = {}
         logger.info("适配器管理器初始化完成")
 
     async def start_adapter(self, signature: str) -> bool:
@@ -68,6 +69,14 @@ class AdapterManager:
             logger.error(f"未找到适配器组件: {signature}")
             return False
 
+        # 子进程模式已移除：如果适配器仍声明 run_in_subprocess=True，则拒绝启动。
+        if getattr(adapter_cls, "run_in_subprocess", False):
+            logger.error(
+                f"适配器 '{signature}' 声明 run_in_subprocess=True，但子进程适配器支持已移除；"
+                "请改为进程内运行或使用独立进程/容器方式部署该适配器。"
+            )
+            return False
+
         # 获取插件实例（用于传递给适配器）
         plugin_manager = _get_plugin_manager()
         plugin_name = signature.split(":")[0]
@@ -75,13 +84,43 @@ class AdapterManager:
 
         # 实例化适配器
         try:
+            # 尝试获取 SinkManager 并创建 CoreSink
+            core_sink = None
+            try:
+                from src.core.transport.sink.sink_manager import get_sink_manager
+
+                sink_mgr = get_sink_manager()
+                # 创建消息回调（稍后设置）
+                core_sink = None  # SinkManager 会在 setup_adapter_sink 中设置
+            except RuntimeError:
+                # SinkManager 未初始化，延迟设置 CoreSink
+                logger.debug(f"SinkManager 未初始化，延迟设置 CoreSink: {signature}")
+                core_sink = None
+
             adapter_instance = adapter_cls(
-                core_sink=None,  # 这里需要根据实际需求配置
+                core_sink=core_sink,
                 plugin=plugin_instance,
             )
         except Exception as e:
             logger.error(f"实例化适配器 '{signature}' 失败: {e}")
             return False
+
+        # 设置 CoreSink（如果 SinkManager 可用）
+        if core_sink is None:
+            try:
+                from src.core.transport.sink.sink_manager import get_sink_manager
+
+                sink_mgr = get_sink_manager()
+                await sink_mgr.setup_adapter_sink(signature)
+                # 获取设置后的 CoreSink
+                core_sink = sink_mgr.get_sink(signature)
+                if core_sink:
+                    adapter_instance.core_sink = core_sink
+                    logger.debug(f"为适配器 {signature} 设置 CoreSink")
+            except RuntimeError:
+                logger.debug(f"SinkManager 仍未可用，跳过 CoreSink 设置: {signature}")
+            except Exception as e:
+                logger.warning(f"设置 CoreSink 失败: {e}")
 
         # 启动适配器
         try:
@@ -123,7 +162,9 @@ class AdapterManager:
 
         try:
             # 停止适配器
-            await adapter_instance.stop()
+            stop = getattr(adapter_instance, "stop", None)
+            if callable(stop):
+                await stop()
 
             # 从活跃列表中移除
             del self._active_adapters[signature]
@@ -185,7 +226,7 @@ class AdapterManager:
         Examples:
             >>> adapter = manager.get_adapter("my_plugin:adapter:qq")
         """
-        return self._active_adapters.get(signature)
+        return self._active_adapters.get(signature)  # type: ignore[return-value]
 
     def get_all_adapters(self) -> dict[str, "BaseAdapter"]:
         """获取所有已启动的适配器。
@@ -196,7 +237,7 @@ class AdapterManager:
         Examples:
             >>> adapters = manager.get_all_adapters()
         """
-        return self._active_adapters.copy()
+        return self._active_adapters.copy()  # type: ignore[return-value]
 
     def list_active_adapters(self) -> list[str]:
         """列出所有已启动的适配器签名。
