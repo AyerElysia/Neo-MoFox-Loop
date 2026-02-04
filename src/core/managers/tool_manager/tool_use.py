@@ -84,6 +84,12 @@ class ToolUse:
         """
         start_time = time.time()
 
+        # Collection 门控：工具是否可用取决于当前 stream 的解包状态
+        from src.core.managers.collection_manager import get_collection_manager
+
+        if not get_collection_manager().is_component_available(signature, message.stream_id):
+            raise RuntimeError(f"Tool 在当前聊天流未解包启用: {signature}")
+
         # 从注册表获取 Tool 类
         registry = get_global_registry()
         tool_cls = registry.get(signature)

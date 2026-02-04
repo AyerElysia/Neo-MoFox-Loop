@@ -10,6 +10,7 @@ from typing import Annotated, Any, TYPE_CHECKING
 
 from src.core.components.types import ChatType
 from src.core.components.utils import parse_function_signature
+from src.kernel.llm.payload.tooling import LLMUsable
 
 if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin

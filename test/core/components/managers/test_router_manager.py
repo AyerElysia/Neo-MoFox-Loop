@@ -4,7 +4,7 @@
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from src.core.managers.router_manager import (
     RouterManager,
@@ -52,6 +52,9 @@ class TestPlugin(BasePlugin):
         """初始化测试插件（无需配置）。"""
         # 测试用插件不需要真实配置
         pass
+
+    def get_components(self) -> list[type]:
+        return []
 
 
 class TestRouterManager:
@@ -254,7 +257,7 @@ class TestRouterManager:
     @pytest.mark.asyncio
     async def test_mount_all_routers(self, manager, http_server, plugin, registry):
         """测试挂载所有已加载插件的 Router。"""
-        mock_plugin_manager = AsyncMock()
+        mock_plugin_manager = Mock()
         mock_plugin_manager.get_all_plugins.return_value = {"test_plugin": plugin}
 
         with patch("src.core.managers.router_manager.get_global_registry") as mock_registry, \

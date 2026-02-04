@@ -244,6 +244,12 @@ class ActionManager:
         if not action_cls:
             raise ValueError(f"Action 类未找到: {signature}")
 
+        # Collection 门控：Action 是否可用取决于当前 stream 的解包状态
+        from src.core.managers.collection_manager import get_collection_manager
+
+        if not get_collection_manager().is_component_available(signature, message.stream_id):
+            raise RuntimeError(f"Action 在当前聊天流未解包启用: {signature}")
+
         # 获取或创建 ChatStream（使用 StreamManager）
         from src.core.managers.stream_manager import get_stream_manager
 

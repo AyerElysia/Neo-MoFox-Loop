@@ -170,9 +170,14 @@ class BaseChatter(ABC):
             >>> usables = await self.get_llm_usables()
             >>> [MyAction, MyTool, MyCollection]
         """
-        from src.core.components.types import ComponentType
+        from src.core.components.types import ComponentType, ComponentState
+        from src.core.components.state_manager import get_global_state_manager
+        from src.core.managers.collection_manager import get_collection_manager
 
         usables: list[type["LLMUsable"]] = []
+
+        state_manager = get_global_state_manager()
+        collection_manager = get_collection_manager()
 
         # 获取所有组件
         components = self.plugin.get_components()
@@ -181,6 +186,9 @@ class BaseChatter(ABC):
             # 检查是否是 LLMUsable（Action、Tool、Collection）
             sig = getattr(component_cls, "__signature__", None)
             if sig:
+                # 仅返回“可用”的组件
+                if state_manager.get_state(sig) != ComponentState.ACTIVE:
+                    continue
                 sig_parts = sig.split(":")
                 if len(sig_parts) == 3:
                     comp_type = sig_parts[1]
@@ -189,6 +197,10 @@ class BaseChatter(ABC):
                         ComponentType.TOOL.value,
                         ComponentType.COLLECTION.value,
                     ):
+                        # Collection 解包只影响当前聊天流：对 Action/Tool 做 stream 级门控过滤
+                        if comp_type in (ComponentType.ACTION.value, ComponentType.TOOL.value):
+                            if not collection_manager.is_component_available(sig, self.stream_id):
+                                continue
                         usables.append(component_cls)
 
         return usables

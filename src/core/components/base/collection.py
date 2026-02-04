@@ -68,6 +68,51 @@ class BaseCollection(ABC, LLMUsable):
         """
         self.plugin = plugin
 
+    async def execute(self, stream_id: str | None = None) -> tuple[bool, dict[str, Any]]:
+        """执行 Collection（解包并激活内部组件）。
+
+        与 Action/Tool 一样，Collection 作为 LLMUsable 也可以被调用。
+        默认行为是：解包自身，从而解除门控并激活其内部组件。
+
+        Returns:
+            tuple[bool, dict[str, Any]]: (是否成功, 结果详情)
+        """
+        signature = self.get_signature()
+        if not signature:
+            sig = getattr(self.__class__, "__signature__", None)
+            if isinstance(sig, str) and sig:
+                signature = sig
+            else:
+                plugin_name = getattr(self.plugin, "plugin_name", "")
+                if plugin_name:
+                    signature = f"{plugin_name}:collection:{self.collection_name}"
+
+        if not signature:
+            return False, {"error": "Collection signature 未就绪"}
+
+        from src.core.managers.collection_manager import get_collection_manager
+
+        manager = get_collection_manager()
+        unpacked = await manager.unpack_collection(
+            signature,
+            recursive=True,
+            plugin=self.plugin,
+            stream_id=stream_id,
+        )
+
+        component_signatures: list[str] = []
+        for component_cls in unpacked:
+            sig = getattr(component_cls, "__signature__", None)
+            if isinstance(sig, str):
+                component_signatures.append(sig)
+
+        return True, {
+            "collection": signature,
+            "stream_id": stream_id or "__global__",
+            "components_count": len(unpacked),
+            "components": component_signatures,
+        }
+
     @classmethod
     def get_signature(cls) -> str | None:
         """获取动作组件的唯一签名。
@@ -80,7 +125,7 @@ class BaseCollection(ABC, LLMUsable):
             >>> "my_plugin:action:send_emoji"
         """
         return f"{cls.plugin_name}:collection:{cls.collection_name}" if cls.plugin_name != "unknown_plugin" else None
-    
+
     @abstractmethod
     async def get_contents(self) -> list[str]:
         """获取 Collection 内部包含的所有 LLMUsable 组件。

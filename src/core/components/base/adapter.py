@@ -9,7 +9,7 @@ import asyncio
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from mofox_wire import AdapterBase as MofoxAdapterBase
+from mofox_wire import AdapterBase
 from mofox_wire import CoreSink, MessageEnvelope, ProcessCoreSink
 
 from src.kernel.concurrency import get_task_manager
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from src.core.components.base.plugin import BasePlugin
 
 
-class BaseAdapter(MofoxAdapterBase):
+class BaseAdapter(AdapterBase):
     """适配器组件基类。
 
     Adapter 负责与外部平台通信，是 Bot 与平台之间的桥梁。
