@@ -92,3 +92,4 @@ old/
 data/*
 .claude/
 config/*
+plugins/*

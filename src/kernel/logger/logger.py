@@ -35,6 +35,26 @@ def _get_event_bus() -> EventBus:
 # 日志广播事件名称
 LOG_OUTPUT_EVENT = "log_output"
 
+# 全局配置
+_global_config: dict[str, Any] = {
+    "log_dir": "logs",
+    "log_level": "DEBUG",  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    "enable_file": False,
+    "file_rotation": RotationMode.DATE,
+    "max_file_size": 10 * 1024 * 1024,  # 10MB
+    "enable_event_broadcast": True,
+}
+_config_lock = threading.Lock()
+
+# 日志等级优先级映射
+_LOG_LEVEL_PRIORITY = {
+    "DEBUG": 0,
+    "INFO": 1,
+    "WARNING": 2,
+    "ERROR": 3,
+    "CRITICAL": 4,
+}
+
 
 class Logger:
     """日志记录器
@@ -50,6 +70,7 @@ class Logger:
         metadata: 元数据字典
         _lock: 线程锁
         _enable_file: 是否启用文件输出
+        _log_level: 日志等级
     """
 
     def __init__(
@@ -63,6 +84,7 @@ class Logger:
         file_rotation: RotationMode = RotationMode.DATE,
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
         enable_event_broadcast: bool = True,
+        log_level: str | None = None,
     ) -> None:
         """初始化日志记录器
 
@@ -76,6 +98,7 @@ class Logger:
             file_rotation: 文件轮转模式
             max_file_size: 单个日志文件最大大小（字节），仅在 SIZE 模式下生效
             enable_event_broadcast: 是否启用事件广播（发布到 on_log_output 事件）
+            log_level: 日志等级，如果为 None 则使用全局配置
         """
         self.name = name
         self.display = display or name
@@ -84,6 +107,10 @@ class Logger:
         self._lock = threading.Lock()
         self._enable_file = enable_file
         self._enable_event_broadcast = enable_event_broadcast
+        
+        # 设置日志等级（优先使用传入的，否则使用全局配置）
+        with _config_lock:
+            self._log_level = (log_level or _global_config["log_level"]).upper()
 
         # 创建或使用提供的 Console
         if console is None:
@@ -166,6 +193,10 @@ class Logger:
             color: 日志颜色
             **metadata: 额外的元数据
         """
+        # 检查日志等级过滤
+        if not self._should_log(level):
+            return
+            
         with self._lock:
             # 合并元数据
             all_metadata = {**self.metadata, **metadata}
@@ -257,6 +288,36 @@ class Logger:
             # 事件广播失败不应影响日志系统本身
             # 静默忽略错误
             pass
+
+    def _should_log(self, level: str) -> bool:
+        """检查是否应该输出该级别的日志
+
+        Args:
+            level: 日志级别
+
+        Returns:
+            bool: 是否应该输出
+        """
+        level_priority = _LOG_LEVEL_PRIORITY.get(level.upper(), 0)
+        current_priority = _LOG_LEVEL_PRIORITY.get(self._log_level, 0)
+        return level_priority >= current_priority
+
+    def set_log_level(self, level: str) -> None:
+        """设置日志等级
+
+        Args:
+            level: 日志等级（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+        """
+        with self._lock:
+            self._log_level = level.upper()
+
+    def get_log_level(self) -> str:
+        """获取当前日志等级
+
+        Returns:
+            str: 当前日志等级
+        """
+        return self._log_level
 
     def set_metadata(self, key: str, value: Any) -> None:
         """设置元数据
@@ -379,16 +440,66 @@ _loggers: dict[str, Logger] = {}
 _lock = threading.Lock()
 
 
+def initialize_logger_system(
+    log_dir: str | Path = "logs",
+    log_level: str = "DEBUG",
+    enable_file: bool = False,
+    file_rotation: RotationMode = RotationMode.DATE,
+    max_file_size: int = 10 * 1024 * 1024,
+    enable_event_broadcast: bool = True,
+) -> None:
+    """初始化日志系统全局配置
+
+    此方法应在核心启动时调用，用于设置全局的日志配置。
+    之后创建的所有logger将默认使用这些配置（除非在创建时显式指定）。
+
+    Args:
+        log_dir: 日志文件目录路径
+        log_level: 全局日志等级（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+        enable_file: 是否默认启用文件输出
+        file_rotation: 文件轮转模式
+        max_file_size: 单个日志文件最大大小（字节）
+        enable_event_broadcast: 是否默认启用事件广播
+
+    Example:
+        >>> from src.kernel.logger import initialize_logger_system
+        >>> # 在核心启动时调用
+        >>> initialize_logger_system(
+        ...     log_dir="logs/app",
+        ...     log_level="INFO",
+        ...     enable_file=True,
+        ... )
+    """
+    with _config_lock:
+        _global_config["log_dir"] = log_dir
+        _global_config["log_level"] = log_level.upper()
+        _global_config["enable_file"] = enable_file
+        _global_config["file_rotation"] = file_rotation
+        _global_config["max_file_size"] = max_file_size
+        _global_config["enable_event_broadcast"] = enable_event_broadcast
+
+
+def get_global_log_config() -> dict[str, Any]:
+    """获取全局日志配置
+
+    Returns:
+        dict[str, Any]: 全局日志配置字典
+    """
+    with _config_lock:
+        return dict(_global_config)
+
+
 def get_logger(
     name: str,
     display: str | None = None,
     color: COLOR | str = COLOR.WHITE,
     console: Console | None = None,
-    enable_file: bool = False,
-    log_dir: str | Path = "logs",
-    file_rotation: RotationMode = RotationMode.DATE,
-    max_file_size: int = 10 * 1024 * 1024,
-    enable_event_broadcast: bool = True,
+    enable_file: bool | None = None,
+    log_dir: str | Path | None = None,
+    file_rotation: RotationMode | None = None,
+    max_file_size: int | None = None,
+    enable_event_broadcast: bool | None = None,
+    log_level: str | None = None,
 ) -> Logger:
     """获取或创建日志记录器
 
@@ -397,39 +508,52 @@ def get_logger(
         display: 显示名称，如果为 None 则使用 name
         color: 日志颜色
         console: rich.Console 实例
-        enable_file: 是否启用文件输出
-        log_dir: 日志文件目录
-        file_rotation: 文件轮转模式
-        max_file_size: 单个日志文件最大大小（字节）
-        enable_event_broadcast: 是否启用事件广播（发布到 on_log_output 事件）
+        enable_file: 是否启用文件输出（None 则使用全局配置）
+        log_dir: 日志文件目录（None 则使用全局配置）
+        file_rotation: 文件轮转模式（None 则使用全局配置）
+        max_file_size: 单个日志文件最大大小（字节）（None 则使用全局配置）
+        enable_event_broadcast: 是否启用事件广播（None 则使用全局配置）
+        log_level: 日志等级（None 则使用全局配置）
 
     Returns:
         Logger: 日志记录器实例
 
     Example:
-        >>> from src.kernel.logger import get_logger, COLOR, RotationMode
-        >>> # 不启用文件输出
+        >>> from src.kernel.logger import get_logger, COLOR, RotationMode, initialize_logger_system
+        >>> # 先初始化全局配置
+        >>> initialize_logger_system(log_dir="logs", log_level="INFO", enable_file=True)
+        >>> # 使用全局配置创建logger
         >>> logger = get_logger("my_logger", display="我的日志", color=COLOR.BLUE)
         >>> logger.info("Hello World!")
-        >>> # 启用文件输出
-        >>> logger = get_logger("my_logger", enable_file=True, file_rotation=RotationMode.DATE)
-        >>> logger.info("这条日志会同时输出到控制台和文件")
-        >>> # 启用事件广播
-        >>> logger = get_logger("my_logger", enable_event_broadcast=True)
-        >>> logger.info("这条日志会广播到事件系统")
+        >>> # 覆盖全局配置
+        >>> logger2 = get_logger("my_logger2", log_level="DEBUG")
+        >>> logger2.debug("这条debug日志会显示")
     """
     with _lock:
         if name not in _loggers:
+            # 使用全局配置作为默认值
+            with _config_lock:
+                actual_enable_file = enable_file if enable_file is not None else _global_config["enable_file"]
+                actual_log_dir = log_dir if log_dir is not None else _global_config["log_dir"]
+                actual_file_rotation = file_rotation if file_rotation is not None else _global_config["file_rotation"]
+                actual_max_file_size = max_file_size if max_file_size is not None else _global_config["max_file_size"]
+                actual_enable_event_broadcast = (
+                    enable_event_broadcast if enable_event_broadcast is not None 
+                    else _global_config["enable_event_broadcast"]
+                )
+                actual_log_level = log_level if log_level is not None else _global_config["log_level"]
+            
             _loggers[name] = Logger(
                 name=name,
                 display=display,
                 color=color,
                 console=console,
-                enable_file=enable_file,
-                log_dir=log_dir,
-                file_rotation=file_rotation,
-                max_file_size=max_file_size,
-                enable_event_broadcast=enable_event_broadcast,
+                enable_file=actual_enable_file,
+                log_dir=actual_log_dir,
+                file_rotation=actual_file_rotation,
+                max_file_size=actual_max_file_size,
+                enable_event_broadcast=actual_enable_event_broadcast,
+                log_level=actual_log_level,
             )
         return _loggers[name]
 

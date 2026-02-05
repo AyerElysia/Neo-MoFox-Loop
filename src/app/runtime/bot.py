@@ -105,10 +105,13 @@ class Bot:
             # Phase 1: Kernel 初始化
             await self._initialize_kernel()
 
-            # Phase 2: 插件发现
+            # Phase 2: Core 组件初始化
+            await self._initialize_core()
+
+            # Phase 3: 插件发现
             await self._discover_plugins()
 
-            # Phase 3: 插件加载
+            # Phase 4: 插件加载
             await self._load_plugins()
 
             self._initialized = True
@@ -152,8 +155,9 @@ class Bot:
         self.ui.update_phase_status("配置", "已加载")
 
         # Step 2: Logger
-        from src.kernel.logger import get_logger
+        from src.kernel.logger import get_logger, initialize_logger_system
 
+        initialize_logger_system(log_dir=self.log_dir, log_level=self.config.bot.log_level)
         self.logger = get_logger("bot", enable_file=True, log_dir=self.log_dir)
         self.ui.update_phase_status("日志", "已初始化")
 
@@ -207,6 +211,32 @@ class Bot:
         self.storage = JSONStore("data/json_storage")
         self.ui.update_phase_status("存储", "已初始化")
 
+    async def _initialize_core(self) -> None:
+        """初始化 Core 层组件
+
+        包括插件管理器、Action 管理器、Chatter 管理器、Command 管理器等。
+        """
+        # Step 1: 初始化 MessageReceiver 和 SinkManager
+        from src.core.transport import MessageReceiver, SinkManager
+        from src.core.transport.sink import set_sink_manager
+        
+        self.message_receiver = MessageReceiver()
+        self.sink_manager = SinkManager(self.message_receiver)
+        set_sink_manager(self.sink_manager)
+        self.ui.update_phase_status("消息接收器", "已初始化")
+        
+        # Step 2: 导入其他manager以初始化
+        from src.core.managers import (
+            initialize_adapter_manager,
+            get_plugin_manager,
+            get_action_manager,
+            get_chatter_manager,
+            get_command_manager,
+            get_service_manager,         
+        )
+        initialize_adapter_manager()
+        self.ui.update_phase_status("核心管理器", "已初始化")
+
     async def _discover_plugins(self) -> None:
         """发现插件并解析依赖"""
         self.ui.update_phase_status("发现插件", "扫描中...")
@@ -252,6 +282,10 @@ class Bot:
         self._stats["plugins_failed"] = len(
             [r for r in self.load_results.values() if not r]
         )
+        from src.kernel.event import get_event_bus
+        from src.core.components.types import EventType
+
+        await get_event_bus().publish(EventType.ON_ALL_PLUGIN_LOADED, {})
 
     async def run(self) -> None:
         """主运行循环
@@ -267,9 +301,6 @@ class Bot:
         # 启动调度器
         await self.scheduler.start()
         self._stats["scheduler_running"] = True
-
-        # 启动后台任务
-        await self._start_background_tasks()
 
         # 启动实时仪表盘（如果 UI 级别为 VERBOSE）
         if self.ui.level == UILevel.VERBOSE:
@@ -320,20 +351,6 @@ class Bot:
 
             # 恢复信号处理器
             signal_handler.restore_handlers()
-
-    async def _start_background_tasks(self) -> None:
-        """启动后台任务"""
-        # Watchdog 监控（同步方法，启动后台线程）
-        self.watchdog.start()
-
-        # 启动所有适配器
-        await self._start_adapters()
-
-    async def _start_adapters(self) -> None:
-        """启动所有适配器"""
-        # TODO: 实现适配器启动逻辑
-        # 从 AdapterManager 获取所有适配器并启动
-        pass
 
     async def _update_runtime_stats(self) -> None:
         """更新运行时统计数据（用于仪表盘）"""

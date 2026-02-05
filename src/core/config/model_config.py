@@ -224,7 +224,7 @@ class ModelTasksSection(SectionBase):
         default_factory=lambda: TaskConfigSection(model_list=[]),
         description="语音识别模型配置",
     )
-    utils_video: TaskConfigSection = Field(
+    video: TaskConfigSection = Field(
         default_factory=lambda: TaskConfigSection(model_list=[]),
         description="视频分析模型配置",
     )

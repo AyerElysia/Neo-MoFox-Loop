@@ -41,33 +41,23 @@ class SinkManager:
         self._active_sinks: Dict[str, Any] = {}
         logger.info("SinkManager 初始化完成")
 
-    async def setup_adapter_sink(self, adapter_signature: str) -> None:
+    async def setup_adapter_sink(self, adapter_signature: str, adapter: Any) -> None:
         """为 Adapter 设置 CoreSink。
 
-        从 AdapterManager 获取 Adapter 实例，创建 CoreSink 并设置到 Adapter。
+        创建 CoreSink 并设置到 Adapter。
 
         Args:
             adapter_signature: 适配器签名，格式为 "plugin_name:adapter:adapter_name"
-
-        Raises:
-            RuntimeError: 如果 AdapterManager 未初始化
-            ValueError: 如果 Adapter 未找到
+            adapter: 适配器实例
 
         Examples:
-            >>> await sink_mgr.setup_adapter_sink("my_plugin:adapter:qq")
+            >>> await sink_mgr.setup_adapter_sink("my_plugin:adapter:qq", adapter_instance)
         """
-        from src.core.managers.adapter_manager import get_adapter_manager
         from src.core.transport.sink.sink_factory import create_sink_for_adapter
 
-        # 获取 AdapterManager
-        adapter_mgr = get_adapter_manager()
-
-        # 获取 Adapter 实例
-        adapter = adapter_mgr.get_adapter(adapter_signature)
-
         if not adapter:
-            logger.error(f"Adapter 未找到: {adapter_signature}")
-            raise ValueError(f"Adapter 未找到: {adapter_signature}")
+            logger.error(f"Adapter 实例为空: {adapter_signature}")
+            raise ValueError(f"Adapter 实例为空: {adapter_signature}")
 
         # 创建消息回调
         async def message_callback(envelope: MessageEnvelope) -> None:

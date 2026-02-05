@@ -46,6 +46,10 @@ class CoreConfig(ConfigBase):
             default="logs",
             description="日志目录",
         )
+        log_level: str = Field(
+            default="INFO",
+            description="日志级别：DEBUG/INFO/WARNING/ERROR/CRITICAL",
+        )
         data_dir: str = Field(
             default="data",
             description="数据目录",
@@ -225,7 +229,7 @@ def init_core_config(config_path: str | None = None) -> CoreConfig:
         _global_config = CoreConfig()
     else:
         # 从文件加载配置
-        _global_config = CoreConfig.load(config_path)
+        _global_config = CoreConfig.load(config_path, auto_update=True)
 
     return _global_config
 

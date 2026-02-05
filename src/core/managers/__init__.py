@@ -5,6 +5,7 @@
 """
 
 from src.core.managers.plugin_manager import get_plugin_manager
+from src.core.managers.adapter_manager import get_adapter_manager, initialize_adapter_manager
 from src.core.managers.action_manager import get_action_manager
 from src.core.managers.chatter_manager import get_chatter_manager
 from src.core.managers.command_manager import get_command_manager
@@ -19,6 +20,7 @@ __all__ = [
     # 主要管理器
     "get_plugin_manager",
     "get_action_manager",
+    "get_adapter_manager",
     "get_chatter_manager",
     "get_command_manager",
     "get_service_manager",
@@ -26,4 +28,6 @@ __all__ = [
     "get_stream_manager",
     "get_event_manager",
     "get_router_manager",
+    # 初始化函数
+    "initialize_adapter_manager",
 ]

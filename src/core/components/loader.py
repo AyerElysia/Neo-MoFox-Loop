@@ -425,6 +425,11 @@ class PluginLoader:
             )
             results[plugin_name] = success
 
+        from src.kernel.event import get_event_bus
+        from src.core.components.types import EventType
+
+        await get_event_bus().publish(EventType.ON_ALL_PLUGIN_LOADED, {})
+
         return results
 
 

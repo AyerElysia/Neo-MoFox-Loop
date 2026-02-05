@@ -2,11 +2,11 @@
 
 启动 Neo-MoFox Bot 应用。
 """
-
+import tomllib
 import asyncio
 
 
-def load_ui_level_from_config(config_path: str = "config/core.toml") -> "UILevel":
+def load_ui_level_from_config(config_path: str = "config/core.toml") -> "UILevel":  # type: ignore
     """从配置文件加载 UI 级别
 
     Args:
@@ -16,11 +16,6 @@ def load_ui_level_from_config(config_path: str = "config/core.toml") -> "UILevel
         UILevel: UI 级别枚举值
     """
     from src.app.runtime import UILevel
-
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib  # type: ignore
 
     level_map = {
         "minimal": UILevel.MINIMAL,

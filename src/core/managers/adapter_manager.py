@@ -7,16 +7,18 @@
 import asyncio
 from typing import TYPE_CHECKING
 
+from src.kernel.event import get_event_bus, EventDecision
 from src.kernel.logger import get_logger
 from src.core.components.registry import get_global_registry
 from src.core.components.state_manager import get_global_state_manager
-from src.core.components.types import ComponentState
+from src.core.components.types import ComponentState, EventType, ComponentType
 
 if TYPE_CHECKING:
     from src.core.components.base.adapter import BaseAdapter
     from src.core.managers.plugin_manager import PluginManager
 
 logger = get_logger("adapter_manager")
+
 
 
 class AdapterManager:
@@ -111,7 +113,8 @@ class AdapterManager:
                 from src.core.transport.sink.sink_manager import get_sink_manager
 
                 sink_mgr = get_sink_manager()
-                await sink_mgr.setup_adapter_sink(signature)
+                # 直接传递适配器实例给 setup_adapter_sink
+                await sink_mgr.setup_adapter_sink(signature, adapter_instance)
                 # 获取设置后的 CoreSink
                 core_sink = sink_mgr.get_sink(signature)
                 if core_sink:
@@ -164,7 +167,10 @@ class AdapterManager:
             # 停止适配器
             stop = getattr(adapter_instance, "stop", None)
             if callable(stop):
-                await stop()
+                result = stop()
+                # 如果是协程，await它
+                if asyncio.iscoroutine(result):
+                    await result
 
             # 从活跃列表中移除
             del self._active_adapters[signature]
@@ -311,9 +317,64 @@ def reset_adapter_manager() -> None:
     global _global_adapter_manager
     _global_adapter_manager = None
 
+def initialize_adapter_manager() -> None:
+    """初始化适配器管理器。
+
+    主要用于在应用启动时进行必要的初始化操作。
+    """
+    get_event_bus().subscribe(EventType.ON_ALL_PLUGIN_LOADED, on_all_plugins_loaded)
+
+async def on_all_plugins_loaded(_: str, params: dict) -> tuple[EventDecision, dict]:
+    """所有插件加载完毕后，启动所有注册的适配器。
+
+    Args:
+        event_name: 事件名称
+        params: 事件参数字典
+
+    Returns:
+        tuple[EventDecision, dict]: (事件决策, 事件参数)
+    """
+    # 通过 ComponentRegistry 获取所有类型为 ADAPTER 的组件
+    registry = get_global_registry()
+    adapter_components = registry.get_by_type(ComponentType.ADAPTER)
+    
+    if not adapter_components:
+        logger.info("没有注册任何适配器")
+        return (EventDecision.SUCCESS, params)
+    
+    logger.info(f"发现 {len(adapter_components)} 个适配器，开始启动...")
+    
+    # 启动所有适配器
+    manager = get_adapter_manager()
+    started_adapters = []
+    failed_adapters = []
+    
+    for adapter_signature in adapter_components.keys():
+        try:
+            success = await manager.start_adapter(adapter_signature)
+            if success:
+                started_adapters.append(adapter_signature)
+                logger.info(f"✅ 自动启动适配器: {adapter_signature}")
+            else:
+                failed_adapters.append(adapter_signature)
+                logger.error(f"❌ 自动启动适配器失败: {adapter_signature}")
+        except Exception as e:
+            failed_adapters.append(adapter_signature)
+            logger.error(f"❌ 启动适配器 '{adapter_signature}' 时发生异常: {e}")
+    
+    # 记录结果
+    total = len(adapter_components)
+    success_count = len(started_adapters)
+    logger.info(f"适配器启动完成: 成功 {success_count}/{total}")
+    
+    if failed_adapters:
+        logger.warning(f"以下适配器启动失败: {', '.join(failed_adapters)}")
+    
+    return (EventDecision.SUCCESS, params)
 
 # 避免循环导入的延迟导入
 def _get_plugin_manager() -> "PluginManager":
     """延迟导入插件管理器以避免循环导入。"""
     from src.core.managers.plugin_manager import get_plugin_manager as _get_plugin_manager
     return _get_plugin_manager()
+

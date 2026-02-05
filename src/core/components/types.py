@@ -39,7 +39,7 @@ class ComponentType(Enum):
     PLUGIN = "plugin"
 
 
-class EventType(Enum):
+class EventType(str, Enum):
     """事件类型枚举。
 
     定义事件处理器可以订阅的系统事件。
@@ -49,7 +49,7 @@ class EventType(Enum):
     ON_STOP = "on_stop"
     ON_MESSAGE_RECEIVED = "on_message_received"
     ON_MESSAGE_SENT = "on_message_sent"
-    ON_PLUGIN_LOADED = "on_plugin_loaded"
+    ON_ALL_PLUGIN_LOADED = "on_all_plugin_loaded"
     ON_PLUGIN_UNLOADED = "on_plugin_unloaded"
     ON_COMPONENT_LOADED = "on_component_loaded"
     ON_COMPONENT_UNLOADED = "on_component_unloaded"

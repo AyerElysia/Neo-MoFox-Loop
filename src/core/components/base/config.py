@@ -7,12 +7,10 @@
 
 from abc import ABC
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar, Self
 
 from src.kernel.config import ConfigBase
-
-if TYPE_CHECKING:
-    pass
+from src.kernel.config.core import config_section, Field, SectionBase
 
 
 class BaseConfig(ABC, ConfigBase):
@@ -43,9 +41,9 @@ class BaseConfig(ABC, ConfigBase):
     _plugin_: ClassVar[str]
     _signature_: ClassVar[str]
 
-    # 这些属性应由子类覆盖
-    config_name: str = "config"
-    config_description: str = ""
+    # 这些属性应由子类覆盖，使用 ClassVar 避免被 Pydantic 当作字段处理
+    config_name: ClassVar[str] = "config"
+    config_description: ClassVar[str] = ""
 
     @classmethod
     def get_default_path(cls) -> Path | None:
@@ -137,7 +135,7 @@ class BaseConfig(ABC, ConfigBase):
         *,
         auto_generate: bool = True,
         auto_update: bool = True,
-    ) -> "BaseConfig":
+    ) -> Self:
         """为特定插件加载配置。
 
         加载插件配置的便捷方法，支持自动默认文件生成。
@@ -184,3 +182,5 @@ class BaseConfig(ABC, ConfigBase):
             raise FileNotFoundError(f"配置文件未找到: {path}")
 
         return cls.load(path, auto_update=True)
+
+__all__ = ["BaseConfig", "Field", "SectionBase", "config_section"]
