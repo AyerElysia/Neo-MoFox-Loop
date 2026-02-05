@@ -205,10 +205,7 @@ class WatchDog:
             self._task_manager = get_task_manager()
 
         # 清理已完成的任务
-        cleaned = self._task_manager.cleanup_tasks()
-        if cleaned > 0:
-            self._log("info", f"清理了 {cleaned} 个已完成任务")
-
+        self._task_manager.cleanup_tasks()
         # 检查非守护任务超时
         now = datetime.now()
         for task_info in self._task_manager.get_active_tasks():

@@ -15,6 +15,52 @@ class CoreConfig(ConfigBase):
     定义 Core 层的所有配置节。Core 层包含对话管理、用户管理、消息处理等业务逻辑。
     """
 
+    @config_section("bot")
+    class BotSection(SectionBase):
+        """Bot 配置节
+
+        定义 Bot 基本配置、UI 配置和路径配置。
+        """
+
+        name: str = Field(
+            default="Neo-MoFox",
+            description="Bot 名称",
+        )
+        version: str = Field(
+            default="0.1.0",
+            description="Bot 版本",
+        )
+        ui_level: str = Field(
+            default="standard",
+            description="UI 级别：minimal|standard|verbose",
+        )
+        ui_refresh_interval: float = Field(
+            default=1.0,
+            description="仪表盘刷新间隔（秒）",
+        )
+        plugins_dir: str = Field(
+            default="plugins",
+            description="插件目录",
+        )
+        logs_dir: str = Field(
+            default="logs",
+            description="日志目录",
+        )
+        data_dir: str = Field(
+            default="data",
+            description="数据目录",
+        )
+        shutdown_timeout: float = Field(
+            default=30.0,
+            description="优雅关闭超时时间（秒）",
+        )
+        force_shutdown_after: float = Field(
+            default=5.0,
+            description="强制关闭等待时间（秒）",
+        )
+
+    bot: BotSection = Field(default_factory=BotSection)
+
     @config_section("chat")
     class ChatSection(SectionBase):
         """聊天配置节

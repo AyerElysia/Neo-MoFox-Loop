@@ -13,6 +13,7 @@ dependencies = [
     "mofox-wire>=0.1.5",
     "openai>=2.16.0",
     "pydantic>=2.12.5",
+    "pyfiglet>=1.0.4",
     "rich>=14.3.1",
     "sqlalchemy[asyncio]>=2.0.46",
 ]

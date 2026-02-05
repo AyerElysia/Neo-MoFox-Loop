@@ -37,7 +37,6 @@ class ChatterManager:
     def __init__(self) -> None:
         """初始化 Chatter 管理器。"""
         self._active_chatters: dict[str, "BaseChatter"] = {}
-        logger.info("Chatter 管理器初始化完成")
 
     def get_all_chatters(self) -> dict[str, type["BaseChatter"]]:
         """获取所有已注册的 Chatter 组件。

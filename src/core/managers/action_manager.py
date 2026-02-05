@@ -45,7 +45,6 @@ class ActionManager:
     def __init__(self) -> None:
         """初始化 Action 管理器。"""
         self._schema_cache: dict[str, dict[str, Any]] = {}
-        logger.info("Action 管理器初始化完成")
 
     def get_all_actions(self) -> dict[str, type["BaseAction"]]:
         """获取所有已注册的 Action 组件。

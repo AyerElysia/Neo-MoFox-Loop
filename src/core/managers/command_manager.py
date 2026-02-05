@@ -39,7 +39,6 @@ class CommandManager:
     def __init__(self) -> None:
         """初始化 Command 管理器。"""
         self._command_prefixes: list[str] = ["/"]
-        logger.info("Command 管理器初始化完成")
 
     def set_prefixes(self, prefixes: list[str]) -> None:
         """设置命令前缀列表。

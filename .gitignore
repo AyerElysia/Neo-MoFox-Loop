@@ -85,9 +85,10 @@ poetry.lock
 /.pytest_cache/
 /test/__pycache__/
 
-logs/
+logs/*
 htmlcov/
 .ruff_cache/
 old/
-data/
+data/*
 .claude/
+config/*
