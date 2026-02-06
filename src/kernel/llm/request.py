@@ -15,6 +15,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Self
 
+from .context import LLMContextManager
 from .exceptions import LLMConfigurationError, classify_exception
 from .model_client import ModelClientRegistry
 from .monitor import RequestMetrics, RequestTimer, get_global_collector
@@ -69,6 +70,7 @@ class LLMRequest:
     payloads: list[LLMPayload] = field(default_factory=list)
     policy: Policy | None = None
     clients: ModelClientRegistry | None = None
+    context_manager: LLMContextManager | None = None
     enable_metrics: bool = True  # 是否启用指标收集
 
     def __post_init__(self) -> None:
@@ -78,15 +80,19 @@ class LLMRequest:
             object.__setattr__(self, "policy", RoundRobinPolicy())
         if self.clients is None:
             object.__setattr__(self, "clients", ModelClientRegistry())
+        if self.context_manager is None:
+            object.__setattr__(self, "context_manager", LLMContextManager())
 
     def add_payload(self, payload: LLMPayload, position=None) -> Self:
         if position is not None:
             self.payloads.insert(int(position), payload)
         else:
             self.payloads.append(payload)
+        self._maybe_trim_payloads()
         return self
 
     async def send(self, auto_append_response: bool = True, *, stream: bool = True) -> LLMResponse:
+        self._maybe_trim_payloads()
         model_set = _validate_model_set(self.model_set)
 
         # TOOL_RESULT payload 规范化（确保 provider 端可读）
@@ -194,6 +200,11 @@ class LLMRequest:
 
         assert last_error is not None
         raise last_error
+
+    def _maybe_trim_payloads(self) -> None:
+        if not self.context_manager:
+            return
+        self.payloads = self.context_manager.maybe_trim(self.payloads)
 
 
 def _validate_model_entry(model: dict[str, Any]) -> ModelEntry:

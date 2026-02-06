@@ -24,6 +24,7 @@ class LLMRequest:
     payloads: list[LLMPayload] = field(default_factory=list)  # 消息 payload 列表
     policy: Policy | None = None                        # 负载均衡/重试策略
     clients: ModelClientRegistry | None = None          # 模型客户端注册表
+    context_manager: LLMContextManager | None = None    # 上下文管理器（可重载）
     enable_metrics: bool = True                         # 是否启用指标收集
 ```
 
@@ -111,6 +112,12 @@ model_set = [
 
 **描述：** 模型客户端注册表。默认创建内置的 `OpenAIChatClient`。
 
+### context_manager
+
+**类型：** `LLMContextManager | None`
+
+**描述：** 负责 payloads 的上下文管理（QA 组裁剪、压缩等）。可传入自定义子类实例覆盖默认逻辑。
+
 ### enable_metrics
 
 **类型：** `bool`
@@ -132,7 +139,8 @@ request = LLMRequest(
     model_set=models,
     request_name="my_request",
     policy=RoundRobinPolicy(),
-    enable_metrics=True
+    enable_metrics=True,
+    context_manager=LLMContextManager(max_payloads=40)
 )
 ```
 
@@ -167,6 +175,22 @@ request.add_payload(LLMPayload(ROLE.SYSTEM, Text("...")), position=0)
 # 追加多个
 request.add_payload(LLMPayload(ROLE.USER, Text("Question 1")))
 request.add_payload(LLMPayload(ROLE.USER, Text("Question 2")))
+```
+
+### 自定义上下文管理
+
+```python
+from src.kernel.llm import LLMContextManager
+
+class MyContextManager(LLMContextManager):
+    def maybe_trim(self, payloads: list[LLMPayload]) -> list[LLMPayload]:
+        # 自定义策略
+        return super().maybe_trim(payloads)
+
+request = LLMRequest(
+    model_set=models,
+    context_manager=MyContextManager(max_payloads=40)
+)
 ```
 
 ### send

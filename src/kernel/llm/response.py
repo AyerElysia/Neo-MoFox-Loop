@@ -104,6 +104,13 @@ class LLMResponse:
 
         # 将 assistant 回复写回 payloads
         self.payloads.append(LLMPayload(ROLE.ASSISTANT, Text(self.message)))
+        self._maybe_apply_context_manager()
+
+    def _maybe_apply_context_manager(self) -> None:
+        context_manager = getattr(self._upper, "context_manager", None)
+        if not context_manager:
+            return
+        self.payloads = context_manager.maybe_trim(self.payloads)
 
     def to_payload(self) -> LLMPayload:
         return LLMPayload(ROLE.ASSISTANT, Text(self.message or ""))
@@ -116,11 +123,13 @@ class LLMResponse:
             self.payloads.insert(int(position), payload)
         else:
             self.payloads.append(payload)
+        self._maybe_apply_context_manager()
         return self
 
     def add_call_reflex(self, results: list[LLMPayload]) -> Self:
         for payload in results:
             self.payloads.append(payload)
+        self._maybe_apply_context_manager()
         return self
 
     async def send(self, auto_append_response: bool = True, *, stream: bool = True) -> "LLMResponse":

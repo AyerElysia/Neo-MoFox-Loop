@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from src.core.components.types import ChatType
+from src.core.components.base.action import BaseAction
+from src.core.components.base.collection import BaseCollection
+from src.core.components.base.tool import BaseTool
 from src.core.managers import (
     get_collection_manager,
     get_tool_use,

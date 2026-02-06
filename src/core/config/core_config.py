@@ -67,7 +67,7 @@ class CoreConfig(ConfigBase):
             description="默认聊天模式：focus/normal/proactive/priority",
         )
         max_context_size: int = Field(
-            default=100,
+            default=20,
             description="每个聊天流的最大上下文消息数",
         )
     chat: ChatSection = Field(default_factory=ChatSection)

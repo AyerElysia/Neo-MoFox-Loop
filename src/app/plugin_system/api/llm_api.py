@@ -1,5 +1,5 @@
 from enum import Enum
-from src.kernel.llm import LLMRequest, ModelSet
+from src.kernel.llm import LLMContextManager, LLMRequest, ModelSet
 from src.core.config import get_model_config
 
 class TaskType(Enum):
@@ -12,17 +12,26 @@ class TaskType(Enum):
     VIDEO = "video"
     TOOL_USE = "tool_use"
 
-def create_llm_request(model_set: ModelSet, request_name: str = "") -> LLMRequest:
+def create_llm_request(
+    model_set: ModelSet,
+    request_name: str = "",
+    context_manager: LLMContextManager | None = None,
+) -> LLMRequest:
     """创建 LLMRequest 实例
 
     Args:
         model_set: 模型集
         request_name: 请求名称（可选）
+        context_manager: 上下文管理器（可选）
 
     Returns:
         LLMRequest 实例
     """
-    return LLMRequest(model_set=model_set, request_name=request_name)
+    return LLMRequest(
+        model_set=model_set,
+        request_name=request_name,
+        context_manager=context_manager,
+    )
 
 def get_model_set_by_task(name: str) -> ModelSet:
     """根据任务名称获取 ModelSet

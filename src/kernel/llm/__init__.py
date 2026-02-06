@@ -12,6 +12,7 @@
 """
 
 from .roles import ROLE
+from .context import LLMContextManager
 from .request import LLMRequest
 from .response import LLMResponse
 from .types import ModelEntry, ModelSet
@@ -56,6 +57,7 @@ __all__ = [
 	# 核心类
 	"ROLE",
 	"LLMRequest",
+	"LLMContextManager",
 	"LLMResponse",
 	"LLMPayload",
 	# 类型定义

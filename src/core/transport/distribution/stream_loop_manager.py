@@ -319,7 +319,10 @@ class StreamLoopManager:
                     return False
 
             # 执行 Chatter
-            result_gen = await chatter.execute(list(unread_messages))
+            result_gen = chatter.execute(list(unread_messages))
+            if asyncio.iscoroutine(result_gen):
+                result_gen = await result_gen
+
             # 消费生成器结果
             if result_gen is not None:
                 async for result in result_gen:
