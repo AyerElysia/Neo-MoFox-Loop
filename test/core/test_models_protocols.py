@@ -2,7 +2,6 @@
 
 from typing import Protocol, runtime_checkable
 
-import pytest
 
 
 # 定义测试协议

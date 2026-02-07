@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-import pytest
 
 from src.core.models.message import Message, MessageType
 

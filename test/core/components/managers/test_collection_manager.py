@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-from typing import Generator
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +18,7 @@ from src.core.components.base.action import BaseAction
 from src.core.components.base.collection import BaseCollection
 from src.core.components import BasePlugin
 from src.core.components.base.tool import BaseTool
-from src.core.components.base.chatter import BaseChatter, ChatterResult
+from src.core.components.base.chatter import BaseChatter
 from src.core.components.registry import ComponentRegistry
 from src.core.components.state_manager import get_global_state_manager
 from src.core.components.types import ComponentState

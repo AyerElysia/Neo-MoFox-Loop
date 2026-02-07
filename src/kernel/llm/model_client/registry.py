@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from ..exceptions import LLMConfigurationError
 from .base import ChatModelClient
 from .openai_client import OpenAIChatClient
-from ..types import ModelEntry, ModelSet
+from ..types import ModelEntry
 
 @dataclass(slots=True)
 class ModelClientRegistry:

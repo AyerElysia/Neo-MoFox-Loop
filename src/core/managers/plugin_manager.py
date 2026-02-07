@@ -252,7 +252,6 @@ class PluginManager:
         """从全局注册表中注销某插件的所有组件，并更新状态。"""
         from src.core.components.registry import get_global_registry
         from src.core.components.state_manager import get_global_state_manager
-        from src.core.components.types import build_signature
 
         registry = get_global_registry()
         state_manager = get_global_state_manager()

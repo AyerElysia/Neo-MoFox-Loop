@@ -4,11 +4,10 @@ import asyncio
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Generator
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
-from pytest_mock import MockerFixture
 
 
 # 确保测试中可直接 `import src...`

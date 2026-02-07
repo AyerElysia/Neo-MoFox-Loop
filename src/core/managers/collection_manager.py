@@ -6,7 +6,6 @@ Collection 是 LLMUsable 的集合体，可包含多个 Action、Tool 或嵌套�
 
 from __future__ import annotations
 
-import asyncio
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 

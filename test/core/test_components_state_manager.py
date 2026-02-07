@@ -1,6 +1,5 @@
 """测试 src.core.components.state_manager 模块。"""
 
-import pytest
 
 from src.core.components.state_manager import StateManager
 from src.core.components.types import ComponentState

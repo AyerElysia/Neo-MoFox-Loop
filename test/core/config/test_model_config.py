@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -367,7 +366,6 @@ class TestModelConfig:
 
     def test_get_task_model_set(self):
         """测试获取任务的 ModelSet。"""
-        from src.kernel.llm.types import ModelSet
 
         config = ModelConfig(
             api_providers=[

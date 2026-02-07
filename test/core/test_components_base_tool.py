@@ -1,6 +1,5 @@
 """测试 src.core.components.base.tool 模块。"""
 
-from unittest.mock import MagicMock
 
 import pytest
 

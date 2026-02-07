@@ -2,7 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from src.core.utils.user_query_helper import UserQueryHelper, get_user_query_helper
 

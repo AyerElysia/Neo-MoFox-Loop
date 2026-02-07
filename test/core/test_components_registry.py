@@ -3,7 +3,7 @@
 import pytest
 
 from src.core.components.registry import ComponentRegistry
-from src.core.components.types import ComponentType, parse_signature
+from src.core.components.types import ComponentType
 
 
 class MockComponent:

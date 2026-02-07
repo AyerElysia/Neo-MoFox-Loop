@@ -1,6 +1,5 @@
 """Console UI 管理器测试"""
 
-import pytest
 
 from src.app.runtime.console_ui import UILevel, ConsoleUIManager
 

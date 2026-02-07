@@ -83,7 +83,6 @@ class TestRouterManager:
     @pytest.fixture
     def registry(self):
         """创建测试用的组件注册表。"""
-        from src.core.components.types import ComponentType
         
         registry = ComponentRegistry()
         # 注册测试 Router

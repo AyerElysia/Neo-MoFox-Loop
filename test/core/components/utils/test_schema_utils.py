@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import pytest
 
 from src.core.components.utils.schema_utils import (
     extract_description_from_docstring,

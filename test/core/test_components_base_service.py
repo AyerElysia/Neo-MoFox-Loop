@@ -1,8 +1,6 @@
 """测试 src.core.components.base.service 模块。"""
 
-from unittest.mock import MagicMock
 
-import pytest
 
 from src.core.components.base.service import BaseService
 

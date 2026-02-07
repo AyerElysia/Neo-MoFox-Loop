@@ -1,8 +1,6 @@
 """测试 src.core.components.base.command 模块。"""
 
-from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from src.core.components.base.command import BaseCommand, CommandNode
 from src.core.components.types import ChatType, PermissionLevel

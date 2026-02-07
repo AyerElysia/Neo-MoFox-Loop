@@ -1,6 +1,6 @@
 """测试 src.core.components.base.action 模块。"""
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
