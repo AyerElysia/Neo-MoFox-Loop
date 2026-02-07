@@ -85,7 +85,7 @@ class SignalHandler:
             assert self.bot.logger is not None
             if self.signal_count == 1:
                 self.bot.logger.info(
-                    "Shutdown signal received. Press Ctrl+C again to force quit..."
+                    "已收到关闭信号。再次按下Ctrl+C强制退出..."
                 )
                 self.shutdown_requested.set()
 
@@ -94,7 +94,7 @@ class SignalHandler:
 
             # 第二次信号（3 秒内）：强制立即关闭
             elif self.signal_count >= 2:
-                self.bot.logger.warning("Forcing immediate shutdown...")
+                self.bot.logger.warning("正在强制关闭...")
                 # 强制退出（不执行清理）
                 import sys
 
