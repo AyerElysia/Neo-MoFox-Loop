@@ -278,7 +278,11 @@ class StreamManager:
             }
 
             # 持久化到数据库
-            db_message = await self._messages_crud.get_by(message_id=message.message_id)
+            db_message = await self._messages_crud.get_by(
+                message_id=message.message_id, 
+                platform=message.platform,
+                stream_id=stream_id
+            )
             if not db_message:
                 db_message = await self._messages_crud.create(message_data)
 

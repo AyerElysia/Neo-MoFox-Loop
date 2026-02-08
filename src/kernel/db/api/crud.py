@@ -157,7 +157,7 @@ class CRUDBase(Generic[T]):
                     stmt = stmt.where(getattr(self.model, key) == value)
 
             result = await session.execute(stmt)
-            instance = result.scalar_one_or_none()
+            instance = result.scalars().first()
 
             if instance is not None:
                 # 在会话内转换为字典，然后重建对象
