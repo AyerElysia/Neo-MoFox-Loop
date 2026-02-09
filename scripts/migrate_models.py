@@ -23,6 +23,26 @@ from src.kernel.logger import get_logger
 logger = get_logger("migration", display="Migration")
 
 
+async def check_column_exists(session, table_name, column_name):
+    """检查表中是否存在指定列"""
+    db_type = session.bind.dialect.name
+    if db_type == "postgresql":
+        result = await session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_name = :table_name
+                AND column_name = :column_name
+            """),
+            {"table_name": table_name, "column_name": column_name}
+        )
+        return (result.scalar() or 0) > 0
+    else:  # SQLite
+        result = await session.execute(text(f"PRAGMA table_info({table_name})"))
+        columns = [row[1] for row in result.all()]
+        return column_name in columns
+
+
 async def migrate_person_info():
     """迁移用户信息
 
@@ -193,7 +213,7 @@ async def migrate_person_info():
         await session.commit()
 
         # 5. 删除不需要的旧字段
-        if db_type == "postgresql":
+        if db_type in ["postgresql", "sqlite"]:
             # 删除旧字段
             old_fields = [
                 "person_name",  # 已不再使用
@@ -205,16 +225,7 @@ async def migrate_person_info():
 
             for field in old_fields:
                 # 检查字段是否存在
-                check_result = await session.execute(
-                    text("""
-                        SELECT COUNT(*)
-                        FROM information_schema.columns
-                        WHERE table_name = 'person_info'
-                        AND column_name = :field_name
-                    """),
-                    [{"field_name": field}]
-                )
-                exists = check_result.scalar()
+                exists = await check_column_exists(session, 'person_info', field)
 
                 if exists:
                     try:
@@ -392,7 +403,7 @@ async def migrate_chat_streams():
         await session.commit()
 
         # 6. 删除不需要的旧字段
-        if db_type == "postgresql":
+        if db_type in ["postgresql", "sqlite"]:
             # 删除旧字段
             old_fields = [
                 "create_time",  # 已被 created_at 替代
@@ -419,16 +430,7 @@ async def migrate_chat_streams():
 
             for field in old_fields:
                 # 检查字段是否存在
-                check_result = await session.execute(
-                    text("""
-                        SELECT COUNT(*)
-                        FROM information_schema.columns
-                        WHERE table_name = 'chat_streams'
-                        AND column_name = :field_name
-                    """),
-                    [{"field_name": field}]
-                )
-                exists = check_result.scalar()
+                exists = await check_column_exists(session, 'chat_streams', field)
 
                 if exists:
                     try:
@@ -708,7 +710,7 @@ async def migrate_messages():
                 pass  # 字段可能不存在，跳过
 
         # 8. 删除不需要的旧字段
-        if db_type == "postgresql":
+        if db_type in ["postgresql", "sqlite"]:
             # 删除所有 chat_info_* 字段
             old_chat_info_fields = [
                 "chat_info_stream_id",
@@ -761,16 +763,7 @@ async def migrate_messages():
 
             for field in all_old_fields:
                 # 检查字段是否存在
-                check_result = await session.execute(
-                    text("""
-                        SELECT COUNT(*)
-                        FROM information_schema.columns
-                        WHERE table_name = 'messages'
-                        AND column_name = :field_name
-                    """),
-                    [{"field_name": field}]
-                )
-                exists = check_result.scalar()
+                exists = await check_column_exists(session, 'messages', field)
 
                 if exists:
                     try:
@@ -918,7 +911,7 @@ async def migrate_action_records():
         await session.commit()
 
         # 5. 删除不需要的旧字段
-        if db_type == "postgresql":
+        if db_type in ["postgresql", "sqlite"]:
             # 删除旧字段
             old_fields = [
                 "chat_id",  # 已被 stream_id 替代
@@ -928,16 +921,7 @@ async def migrate_action_records():
 
             for field in old_fields:
                 # 检查字段是否存在
-                check_result = await session.execute(
-                    text("""
-                        SELECT COUNT(*)
-                        FROM information_schema.columns
-                        WHERE table_name = 'action_records'
-                        AND column_name = :field_name
-                    """),
-                    [{"field_name": field}]
-                )
-                exists = check_result.scalar()
+                exists = await check_column_exists(session, 'action_records', field)
 
                 if exists:
                     try:
