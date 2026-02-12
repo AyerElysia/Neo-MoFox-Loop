@@ -98,3 +98,27 @@ def test_llm_request_uses_custom_context_manager() -> None:
     request.add_payload(LLMPayload(ROLE.USER, Text("hello")))
 
     assert manager.called is True
+
+
+def test_context_manager_trims_by_token_budget() -> None:
+    manager = LLMContextManager(max_payloads=10)
+    payloads = [
+        LLMPayload(ROLE.USER, Text("q1")),
+        LLMPayload(ROLE.ASSISTANT, Text("a1")),
+        LLMPayload(ROLE.USER, Text("q2")),
+        LLMPayload(ROLE.ASSISTANT, Text("a2")),
+        LLMPayload(ROLE.USER, Text("q3")),
+        LLMPayload(ROLE.ASSISTANT, Text("a3")),
+    ]
+
+    # 每条消息按 10 token 计，预算 25 时只能保留最后一组（2条消息）
+    trimmed = manager.maybe_trim(
+        payloads,
+        max_token_budget=25,
+        token_counter=lambda items: len(items) * 10,
+    )
+
+    assert len(trimmed) == 2
+    assert trimmed[0].role == ROLE.USER
+    assert trimmed[0].content[0].text == "q3"
+    assert trimmed[1].role == ROLE.ASSISTANT

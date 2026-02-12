@@ -9,6 +9,7 @@
 
 import pytest
 
+from src.kernel.llm.exceptions import LLMError
 from src.kernel.llm.model_client.base import StreamEvent
 from src.kernel.llm.payload import LLMPayload, Text
 from src.kernel.llm.request import LLMRequest
@@ -304,6 +305,53 @@ async def test_response_collects_mixed_stream():
     assert resp.message == "Thinking..."
     assert len(resp.call_list) == 1
     assert resp.call_list[0].name == "search"
+
+
+@pytest.mark.asyncio
+async def test_response_tool_call_compat_stream_repair_success():
+    """测试 tool_call_compat 在流式文本 JSON 下可修复并转为 tool call。"""
+
+    async def compat_events():
+        yield StreamEvent(text_delta="{'tool_calls':")
+        yield StreamEvent(text_delta="[{'name':'search','args':{'query':'neo'}}]}")
+
+    req = LLMRequest(dummy_model_set(), request_name="test")
+    resp = LLMResponse(
+        _stream=compat_events(),
+        _upper=req,
+        _auto_append_response=False,
+        payloads=[LLMPayload(ROLE.USER, Text("hi"))],
+        model_set=req.model_set,
+        tool_call_compat=True,
+    )
+
+    await resp
+
+    assert resp.call_list is not None
+    assert len(resp.call_list) == 1
+    assert resp.call_list[0].name == "search"
+    assert resp.call_list[0].args == {"query": "neo"}
+
+
+@pytest.mark.asyncio
+async def test_response_tool_call_compat_stream_repair_fail_raises():
+    """测试 tool_call_compat JSON repair 失败时抛错。"""
+
+    async def broken_events():
+        yield StreamEvent(text_delta="<not-json>")
+
+    req = LLMRequest(dummy_model_set(), request_name="test")
+    resp = LLMResponse(
+        _stream=broken_events(),
+        _upper=req,
+        _auto_append_response=False,
+        payloads=[LLMPayload(ROLE.USER, Text("hi"))],
+        model_set=req.model_set,
+        tool_call_compat=True,
+    )
+
+    with pytest.raises(LLMError):
+        await resp
 
 
 @pytest.mark.asyncio

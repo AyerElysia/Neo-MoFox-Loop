@@ -473,6 +473,69 @@ class TestOpenAIChatClient:
         assert call_kwargs["presence_penalty"] == 0.1
 
     @pytest.mark.asyncio
+    async def test_create_with_tool_call_compat_prompt_and_parsing(self):
+        """测试 tool_call_compat 模式注入提示词并解析 JSON 返回。"""
+        from src.kernel.llm.model_client.openai_client import OpenAIChatClient
+
+        class MockTool:
+            @classmethod
+            def to_schema(cls):
+                return {
+                    "name": "calculator",
+                    "description": "calc",
+                    "parameters": {"type": "object", "properties": {"a": {"type": "number"}}},
+                }
+
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock()]
+        mock_completion.choices[0].message.content = "{'tool_calls':[{'name':'calculator','args':{'a':1}}]}"
+        mock_completion.choices[0].message.tool_calls = None
+
+        mock_chat = AsyncMock()
+        mock_chat.completions.create = AsyncMock(return_value=mock_completion)
+
+        mock_openai_client = MagicMock()
+        mock_openai_client.chat.completions.create = mock_chat.completions.create
+
+        client = OpenAIChatClient()
+        client._clients = {}
+        client._get_client = MagicMock(return_value=mock_openai_client)
+
+        payloads = [
+            LLMPayload(ROLE.USER, Text("请计算")),
+            LLMPayload(ROLE.TOOL, MockTool),
+        ]
+        model_set = {
+            "api_key": "test-key",
+            "base_url": None,
+            "timeout": None,
+            "max_tokens": None,
+            "temperature": None,
+            "tool_call_compat": True,
+            "extra_params": {},
+        }
+
+        message, tool_calls, _ = await client.create(
+            model_name="gpt-4",
+            payloads=payloads,
+            tools=[],
+            request_name="test",
+            model_set=model_set,
+            stream=False,
+        )
+
+        call_kwargs = mock_chat.completions.create.call_args.kwargs
+        assert "tools" not in call_kwargs
+        assert isinstance(call_kwargs["messages"][-1]["content"], str)
+        assert "tool-call 兼容模式" in call_kwargs["messages"][-1]["content"]
+
+        assert message == ""
+        assert tool_calls is not None
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["name"] == "calculator"
+        assert tool_calls[0]["args"] == {"a": 1}
+
+    @pytest.mark.asyncio
     async def test_stream_iterator_closes_underlying_stream_on_early_stop(self):
         """测试流式响应提前停止消费时会关闭底层流对象。"""
         from src.kernel.llm.model_client.openai_client import OpenAIChatClient

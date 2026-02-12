@@ -23,6 +23,8 @@ class ModelEntry(TypedDict, total=True):
     price_out: float
     temperature: float
     max_tokens: int
+    max_context: int
+    tool_call_compat: bool
     extra_params: dict[str, Any]
 
 

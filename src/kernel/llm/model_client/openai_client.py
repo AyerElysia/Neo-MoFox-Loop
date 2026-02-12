@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from src.kernel.llm.payload.tooling import LLMUsable
+from src.kernel.llm.tool_call_compat import (
+    build_tool_call_compat_prompt,
+    parse_tool_call_compat_response,
+)
 
 from ..payload import Image, LLMPayload, Text, ToolCall, ToolResult
 from ..roles import ROLE
@@ -420,6 +424,8 @@ class OpenAIChatClient:
         trust_env = bool(trust_env) if trust_env is not None else True
         force_ipv4 = bool(extra_params.pop("force_ipv4", False))
         force_sync_http = bool(extra_params.pop("force_sync_http", False))
+        extra_params.pop("context_reserve_ratio", None)
+        extra_params.pop("context_reserve_tokens", None)
 
         client = self._get_client(
             api_key=api_key,
@@ -429,6 +435,12 @@ class OpenAIChatClient:
             force_ipv4=force_ipv4,
         )
         messages, openai_tools = _payloads_to_openai_messages(payloads)
+        tool_call_compat = bool(model_set.get("tool_call_compat", False))
+
+        if tool_call_compat and openai_tools:
+            compat_prompt = build_tool_call_compat_prompt(openai_tools)
+            messages = list(messages)
+            messages.append({"role": "user", "content": compat_prompt})
 
         params: dict[str, Any] = {
             "model": model_name,
@@ -438,7 +450,7 @@ class OpenAIChatClient:
             params["max_tokens"] = max_tokens
         if isinstance(temperature, (int, float)):
             params["temperature"] = float(temperature)
-        if openai_tools:
+        if openai_tools and not tool_call_compat:
             params["tools"] = openai_tools
             if "tool_choice" not in params:
                 # Some providers require explicit auto tool choice to return tool_calls
@@ -467,6 +479,7 @@ class OpenAIChatClient:
                 raise LLMError(f"OpenAI API returned an empty choices list. Response: {resp}")
             msg = resp.choices[0].message
             tool_calls = []
+            message_content = msg.content or ""
             if getattr(msg, "tool_calls", None):
                 for tc in msg.tool_calls:
                     try:
@@ -485,20 +498,25 @@ class OpenAIChatClient:
                         }
                     )
 
-            if not tool_calls and getattr(msg, "function_call", None):
-                fn_call = msg.function_call
+            fn_call = getattr(msg, "function_call", None)
+            fn_name = getattr(fn_call, "name", None) if fn_call is not None else None
+            if not tool_calls and isinstance(fn_name, str) and fn_name:
+                fn_args_raw = getattr(fn_call, "arguments", None)
                 try:
-                    args = json.loads(fn_call.arguments) if fn_call.arguments else {}
+                    args = json.loads(fn_args_raw) if fn_args_raw else {}
                 except Exception:
-                    args = fn_call.arguments
+                    args = fn_args_raw
                 tool_calls.append(
                     {
                         "id": None,
-                        "name": fn_call.name,
+                        "name": fn_name,
                         "args": args,
                     }
                 )
-            return msg.content or "", tool_calls, None
+            if tool_call_compat and openai_tools and not tool_calls:
+                parsed_message, parsed_calls = parse_tool_call_compat_response(message_content)
+                return parsed_message, parsed_calls, None
+            return message_content, tool_calls, None
 
         if not stream:
             try:
@@ -532,6 +550,7 @@ class OpenAIChatClient:
                 raise LLMError(f"OpenAI API returned an empty choices list. Response: {resp}")
             msg = resp.choices[0].message
             tool_calls = []
+            message_content = msg.content or ""
             if getattr(msg, "tool_calls", None):
                 for tc in msg.tool_calls:
                     try:
@@ -550,20 +569,25 @@ class OpenAIChatClient:
                         }
                     )
 
-            if not tool_calls and getattr(msg, "function_call", None):
-                fn_call = msg.function_call
+            fn_call = getattr(msg, "function_call", None)
+            fn_name = getattr(fn_call, "name", None) if fn_call is not None else None
+            if not tool_calls and isinstance(fn_name, str) and fn_name:
+                fn_args_raw = getattr(fn_call, "arguments", None)
                 try:
-                    args = json.loads(fn_call.arguments) if fn_call.arguments else {}
+                    args = json.loads(fn_args_raw) if fn_args_raw else {}
                 except Exception:
-                    args = fn_call.arguments
+                    args = fn_args_raw
                 tool_calls.append(
                     {
                         "id": None,
-                        "name": fn_call.name,
+                        "name": fn_name,
                         "args": args,
                     }
                 )
-            return msg.content or "", tool_calls, None
+            if tool_call_compat and openai_tools and not tool_calls:
+                parsed_message, parsed_calls = parse_tool_call_compat_response(message_content)
+                return parsed_message, parsed_calls, None
+            return message_content, tool_calls, None
 
         stream_resp = await client.chat.completions.create(**params, stream=True)
 

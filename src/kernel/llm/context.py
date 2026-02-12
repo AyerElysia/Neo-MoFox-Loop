@@ -9,6 +9,7 @@ from .payload import LLMPayload
 from .roles import ROLE
 
 CompressionHook = Callable[[list[list[LLMPayload]], list[LLMPayload]], list[LLMPayload]]
+TokenCounter = Callable[[list[LLMPayload]], int]
 
 
 @dataclass(slots=True)
@@ -21,12 +22,60 @@ class LLMContextManager:
     max_payloads: int | None = None
     compression_hook: CompressionHook | None = None
 
-    def maybe_trim(self, payloads: list[LLMPayload]) -> list[LLMPayload]:
-        if self.max_payloads is None or self.max_payloads <= 0:
+    def maybe_trim(
+        self,
+        payloads: list[LLMPayload],
+        *,
+        max_token_budget: int | None = None,
+        token_counter: TokenCounter | None = None,
+    ) -> list[LLMPayload]:
+        trimmed = payloads
+
+        if self.max_payloads is not None and self.max_payloads > 0 and len(trimmed) > self.max_payloads:
+            trimmed = self._trim(trimmed, self.max_payloads)
+
+        if (
+            max_token_budget is not None
+            and max_token_budget > 0
+            and token_counter is not None
+            and token_counter(trimmed) > max_token_budget
+        ):
+            trimmed = self._trim_by_tokens(trimmed, max_token_budget, token_counter)
+
+        return trimmed
+
+    def _trim_by_tokens(
+        self,
+        payloads: list[LLMPayload],
+        token_budget: int,
+        token_counter: TokenCounter,
+    ) -> list[LLMPayload]:
+        pinned, tail = self._split_pinned_prefix(payloads)
+        groups = self._build_qa_groups(tail)
+        if not groups:
             return payloads
-        if len(payloads) <= self.max_payloads:
-            return payloads
-        return self._trim(payloads, self.max_payloads)
+
+        kept_groups = list(groups)
+        dropped_groups: list[list[LLMPayload]] = []
+
+        while len(kept_groups) > 1:
+            candidate = pinned + self._flatten_groups(kept_groups)
+            if token_counter(candidate) <= token_budget:
+                break
+            dropped_groups.append(kept_groups.pop(0))
+
+        remaining_payloads = self._flatten_groups(kept_groups)
+        hook_payloads = self._apply_compression_hook(dropped_groups, remaining_payloads)
+
+        if hook_payloads:
+            combined = pinned + hook_payloads + remaining_payloads
+            while len(kept_groups) > 1 and token_counter(combined) > token_budget:
+                kept_groups.pop(0)
+                remaining_payloads = self._flatten_groups(kept_groups)
+                combined = pinned + hook_payloads + remaining_payloads
+            return combined
+
+        return pinned + remaining_payloads
 
     def _trim(self, payloads: list[LLMPayload], max_payloads: int) -> list[LLMPayload]:
         pinned, tail = self._split_pinned_prefix(payloads)

@@ -20,6 +20,7 @@ from .exceptions import LLMResponseConsumedError
 from .model_client import StreamEvent
 from .payload import LLMPayload, Text, ToolCall
 from .roles import ROLE
+from .tool_call_compat import parse_tool_call_compat_response
 
 if TYPE_CHECKING:
     from .request import LLMRequest
@@ -41,6 +42,7 @@ class LLMResponse:
 
     message: str | None = None
     call_list: list[ToolCall] | None = None
+    tool_call_compat: bool = False
 
     _consumed: bool = False
 
@@ -53,6 +55,21 @@ class LLMResponse:
             if ctx:
                 object.__setattr__(self, "context_manager", ctx)
 
+    def _maybe_apply_tool_call_compat(self) -> None:
+        if not self.tool_call_compat:
+            return
+        if self.call_list:
+            return
+        if not self.message:
+            return
+
+        parsed_message, parsed_calls = parse_tool_call_compat_response(self.message)
+        self.message = parsed_message
+        self.call_list = [
+            ToolCall(id=call.get("id"), name=call.get("name", ""), args=call.get("args", {}))
+            for call in parsed_calls
+        ]
+
     def __await__(self):
         return self._collect_full_response().__await__()
 
@@ -62,6 +79,7 @@ class LLMResponse:
         self._consumed = True
 
         if self._stream is None:
+            self._maybe_apply_tool_call_compat()
             content = self.message or ""
             if content:
                 yield content
@@ -78,6 +96,7 @@ class LLMResponse:
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
+        self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
 
     async def _collect_full_response(self) -> str:
@@ -86,6 +105,7 @@ class LLMResponse:
         self._consumed = True
 
         if self._stream is None:
+            self._maybe_apply_tool_call_compat()
             self._maybe_append_response_to_context()
             return self.message or ""
 
@@ -99,6 +119,7 @@ class LLMResponse:
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
+        self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
         return self.message
 
@@ -182,6 +203,7 @@ class LLMResponse:
         self._consumed = True
 
         if self._stream is None:
+            self._maybe_apply_tool_call_compat()
             content = self.message or ""
             if content:
                 await on_chunk(content)
@@ -199,6 +221,7 @@ class LLMResponse:
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
+        self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
         return self.message
 
@@ -221,6 +244,7 @@ class LLMResponse:
         self._consumed = True
 
         if self._stream is None:
+            self._maybe_apply_tool_call_compat()
             content = self.message or ""
             if content:
                 yield content
@@ -260,6 +284,7 @@ class LLMResponse:
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
+        self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
 
         if stream_error is not None:

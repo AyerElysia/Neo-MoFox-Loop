@@ -142,6 +142,14 @@ class ModelInfoSection(SectionBase):
         default=False,
         description="是否强制使用流式输出模式",
     )
+    max_context: int = Field(
+        default=32768,
+        description="模型最大输入上下文 token 数",
+    )
+    tool_call_compat: bool = Field(
+        default=False,
+        description="是否启用 Tool Call 兼容模式（模型不支持原生工具调用时使用）",
+    )
     extra_params: dict[str, Any] = Field(
         default_factory=dict,
         description="额外参数（用于 API 调用时的额外配置）",
@@ -498,6 +506,8 @@ class ModelConfig(ConfigBase):
                 "price_out": model_info.price_out,
                 "temperature": task_config.temperature,
                 "max_tokens": task_config.max_tokens,
+                "max_context": model_info.max_context,
+                "tool_call_compat": model_info.tool_call_compat,
                 "extra_params": extra_params,
             }
             

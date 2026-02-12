@@ -12,6 +12,7 @@ LLMRequest 支持：
 from __future__ import annotations
 
 import asyncio
+import math
 from dataclasses import dataclass, field
 from typing import Any, Self
 
@@ -27,6 +28,7 @@ from .policy.base import Policy
 from .response import LLMResponse
 from .roles import ROLE
 from .types import ModelEntry, ModelSet
+from .token_counter import count_payload_tokens
 
 
 def _normalize_tool_result_payload(payload: LLMPayload) -> LLMPayload:
@@ -89,6 +91,56 @@ class LLMRequest:
         self._maybe_trim_payloads()
         return self
 
+    def _compute_effective_context_budget(self, model: ModelEntry) -> int | None:
+        max_context = model.get("max_context")
+        if not isinstance(max_context, int) or max_context <= 0:
+            return None
+
+        extra_params = model.get("extra_params")
+        if not isinstance(extra_params, dict):
+            extra_params = {}
+
+        reserve_tokens = extra_params.get("context_reserve_tokens")
+        fixed_reserve = reserve_tokens if isinstance(reserve_tokens, int) and reserve_tokens > 0 else 0
+
+        reserve_ratio = extra_params.get("context_reserve_ratio")
+        ratio = 0.0
+        if isinstance(reserve_ratio, (int, float)):
+            ratio = max(0.0, float(reserve_ratio))
+        ratio_reserve = int(math.floor(max_context * ratio))
+
+        reserve = max(fixed_reserve, ratio_reserve)
+        effective_budget = max_context - reserve
+        return effective_budget if effective_budget > 0 else 1
+
+    def _maybe_trim_payloads_for_model(self, payloads: list[LLMPayload], model: ModelEntry) -> list[LLMPayload]:
+        if not self.context_manager:
+            return payloads
+
+        budget = self._compute_effective_context_budget(model)
+        model_identifier = model.get("model_identifier")
+
+        if budget is None or not isinstance(model_identifier, str) or not model_identifier:
+            return self.context_manager.maybe_trim(payloads)
+
+        try:
+            if count_payload_tokens(payloads, model_identifier=model_identifier) <= budget:
+                return self.context_manager.maybe_trim(payloads)
+        except RuntimeError:
+            return self.context_manager.maybe_trim(payloads)
+
+        def token_counter(items: list[LLMPayload]) -> int:
+            try:
+                return count_payload_tokens(items, model_identifier=model_identifier)
+            except RuntimeError:
+                return 0
+
+        return self.context_manager.maybe_trim(
+            payloads,
+            max_token_budget=budget,
+            token_counter=token_counter,
+        )
+
     async def send(self, auto_append_response: bool = True, *, stream: bool = True) -> LLMResponse:
         self._maybe_trim_payloads()
         model_set = _validate_model_set(self.model_set)
@@ -113,6 +165,9 @@ class LLMRequest:
 
             if step.delay_seconds and step.delay_seconds > 0:
                 await asyncio.sleep(step.delay_seconds)
+
+            payloads = self._maybe_trim_payloads_for_model(payloads, model)
+            self.payloads = list(payloads)
 
             assert self.clients is not None
             client = self.clients.get_client_for_model(model)
@@ -147,6 +202,7 @@ class LLMRequest:
                     payloads=list(self.payloads),
                     model_set=model_set,
                     context_manager=self.context_manager,
+                    tool_call_compat=bool(model.get("tool_call_compat", False)),
                     message=message,
                     call_list=[],
                 )
@@ -229,6 +285,21 @@ def _validate_model_entry(model: dict[str, Any]) -> ModelEntry:
 
     if not isinstance(model.get("extra_params"), dict):
         raise LLMConfigurationError("model.extra_params 必须是 dict")
+
+    if "tool_call_compat" in model and not isinstance(model.get("tool_call_compat"), bool):
+        raise LLMConfigurationError("model.tool_call_compat 必须是 bool")
+    if "max_context" in model and not isinstance(model.get("max_context"), int):
+        raise LLMConfigurationError("model.max_context 必须是 int")
+
+    extra_params = model.get("extra_params", {})
+    if isinstance(extra_params, dict):
+        if "context_reserve_ratio" in extra_params and not isinstance(extra_params.get("context_reserve_ratio"), (int, float)):
+            raise LLMConfigurationError("model.extra_params.context_reserve_ratio 必须是 number")
+        if "context_reserve_tokens" in extra_params and not isinstance(extra_params.get("context_reserve_tokens"), int):
+            raise LLMConfigurationError("model.extra_params.context_reserve_tokens 必须是 int")
+
+    model.setdefault("tool_call_compat", False)
+    model.setdefault("max_context", 0)
 
     return model  # type: ignore[return-value]
 

@@ -385,6 +385,7 @@ class TestModelConfig:
                     api_provider="openai",
                     price_in=0.03,
                     price_out=0.06,
+                    max_context=20000,
                 ),
             ],
         )
@@ -413,6 +414,42 @@ class TestModelConfig:
         assert entry["price_out"] == 0.06
         assert entry["temperature"] == 0.5
         assert entry["max_tokens"] == 1000
+        assert entry["max_context"] == 20000
+        assert entry["tool_call_compat"] is False
+
+    def test_get_task_model_set_with_custom_context_and_compat_fields(self):
+        """测试模型集支持模型级 max_context/tool_call_compat，预留参数存于 extra_params。"""
+        config = ModelConfig(
+            api_providers=[
+                APIProviderSection(
+                    name="openai",
+                    base_url="https://api.openai.com/v1",
+                    api_key="sk-test",
+                ),
+            ],
+            models=[
+                ModelInfoSection(
+                    model_identifier="gpt-4",
+                    name="gpt4",
+                    api_provider="openai",
+                    max_context=16384,
+                    tool_call_compat=True,
+                    extra_params={"context_reserve_ratio": 0.2, "context_reserve_tokens": 512},
+                ),
+            ],
+        )
+        config.model_tasks.utils = TaskConfigSection(
+            model_list=["gpt4"],
+            max_tokens=1000,
+            temperature=0.5,
+        )
+
+        model_set = config.get_task("utils")
+        entry = model_set[0]
+        assert entry["max_context"] == 16384
+        assert entry["tool_call_compat"] is True
+        assert entry["extra_params"]["context_reserve_ratio"] == 0.2
+        assert entry["extra_params"]["context_reserve_tokens"] == 512
 
     def test_get_task_with_multiple_models(self):
         """测试获取包含多个模型的任务。"""

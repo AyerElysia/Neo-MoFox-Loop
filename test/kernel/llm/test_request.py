@@ -82,7 +82,9 @@ def mock_model_set() -> list[dict[str, Any]]:
             "price_out": 0.00006,
             "temperature": 0.7,
             "max_tokens": 4096,
-            "extra_params": {},
+            "max_context": 32768,
+            "tool_call_compat": False,
+            "extra_params": {"context_reserve_ratio": 0.1, "context_reserve_tokens": 0},
         },
         {
             "api_provider": "openai",
@@ -97,7 +99,9 @@ def mock_model_set() -> list[dict[str, Any]]:
             "price_out": 0.00002,
             "temperature": 0.7,
             "max_tokens": 4096,
-            "extra_params": {},
+            "max_context": 32768,
+            "tool_call_compat": False,
+            "extra_params": {"context_reserve_ratio": 0.1, "context_reserve_tokens": 0},
         },
     ]
 
@@ -276,6 +280,29 @@ class TestValidateModelEntry:
         with pytest.raises(LLMConfigurationError, match="model.extra_params 必须是 dict"):
             _validate_model_entry(model)
 
+    def test_invalid_tool_call_compat(self) -> None:
+        """Test validation with invalid tool_call_compat type."""
+        from src.kernel.llm.request import _validate_model_entry
+
+        model = {
+            "api_provider": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "model_identifier": "gpt-4",
+            "api_key": "sk-test",
+            "client_type": "openai",
+            "max_retry": 2,
+            "timeout": 30.0,
+            "retry_interval": 1.0,
+            "price_in": 0.00003,
+            "price_out": 0.00006,
+            "temperature": 0.7,
+            "max_tokens": 4096,
+            "tool_call_compat": "true",  # type: ignore
+            "extra_params": {},
+        }
+        with pytest.raises(LLMConfigurationError, match="model.tool_call_compat 必须是 bool"):
+            _validate_model_entry(model)
+
 
 class TestNormalizeToolResultPayload:
     """Test cases for _normalize_tool_result_payload function."""
@@ -384,6 +411,43 @@ class TestLLMRequestSend:
 
         response = await request.send(stream=False)
         assert response.message == "Success response!"
+
+    @pytest.mark.asyncio
+    async def test_send_applies_token_budget_trimming(
+        self, mock_model_set: list[dict[str, Any]], monkeypatch
+    ) -> None:
+        """Test that model max_context budget triggers payload trimming."""
+
+        class CaptureClient(MockChatClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.last_payloads: list[LLMPayload] = []
+
+            async def create(self, **kwargs):  # type: ignore[override]
+                self.last_payloads = kwargs["payloads"]
+                return "ok", None, None
+
+        mock_model_set[0]["max_context"] = 120
+        mock_model_set[0]["max_tokens"] = 20
+        mock_model_set[0]["extra_params"]["context_reserve_ratio"] = 0.0
+        mock_model_set[0]["extra_params"]["context_reserve_tokens"] = 0
+
+        request = LLMRequest(mock_model_set, "test")
+        for idx in range(6):
+            request.add_payload(LLMPayload(ROLE.USER, Text(f"q{idx}")))
+            request.add_payload(LLMPayload(ROLE.ASSISTANT, Text(f"a{idx}")))
+
+        monkeypatch.setattr(
+            "src.kernel.llm.request.count_payload_tokens",
+            lambda payloads, model_identifier: len(payloads) * 30,
+        )
+
+        capture_client = CaptureClient()
+        request.clients.openai = capture_client
+
+        await request.send(stream=False)
+
+        assert len(capture_client.last_payloads) < 12
 
     @pytest.mark.asyncio
     async def test_send_success_streaming(
