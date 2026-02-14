@@ -21,7 +21,7 @@ class CoreConfig(ConfigBase):
         """
 
         ui_level: str = Field(
-            default="standard",
+            default="verbose",
             description="UI 级别：minimal|standard|verbose",
         )
         ui_refresh_interval: float = Field(
@@ -66,24 +66,6 @@ class CoreConfig(ConfigBase):
         )
 
     bot: BotSection = Field(default_factory=BotSection)
-
-    @config_section("advanced")
-    class AdvancedSection(SectionBase):
-        """高级配置节
-
-        定义全局请求相关的高级参数。
-        """
-
-        force_sync_http: bool = Field(
-            default=False,
-            description="全局强制使用同步 HTTP（OpenAI SDK 同步路径，仅非流式）",
-        )
-        trust_env: bool = Field(
-            default=True,
-            description="是否信任系统代理与环境变量（httpx trust_env）",
-        )
-
-    advanced: AdvancedSection = Field(default_factory=AdvancedSection)
 
     @config_section("chat")
     class ChatSection(SectionBase):
@@ -316,6 +298,24 @@ class CoreConfig(ConfigBase):
             description="HTTP 路由监听端口",
         )
     http_router: HttpRouterSection = Field(default_factory=HttpRouterSection)
+
+    @config_section("advanced")
+    class AdvancedSection(SectionBase):
+        """高级配置节
+
+        定义全局请求相关的高级参数。
+        """
+
+        force_sync_http: bool = Field(
+            default=False,
+            description="全局强制使用同步 HTTP（OpenAI SDK 同步路径，仅非流式）",
+        )
+        trust_env: bool = Field(
+            default=True,
+            description="是否信任系统代理与环境变量（httpx trust_env）",
+        )
+
+    advanced: AdvancedSection = Field(default_factory=AdvancedSection)
 
 # 全局配置实例（延迟初始化）
 _global_config: CoreConfig | None = None
