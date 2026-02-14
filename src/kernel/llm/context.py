@@ -29,6 +29,16 @@ class LLMContextManager:
         max_token_budget: int | None = None,
         token_counter: TokenCounter | None = None,
     ) -> list[LLMPayload]:
+        """
+        根据 max_payloads 和 max_token_budget 对 payloads 进行裁剪。
+
+        裁剪策略：
+        1. 保留开头的系统/工具消息（pinned prefix）。
+        2. 将剩余消息按用户/助手对话分组，整体裁剪掉较早的对话组。
+        3. 如果提供了 compression_hook，则在裁剪掉一批对话组后，调用该 hook 生成压缩后的消息，并将其插入剩余消息的开头。
+        4. 如果 max_token_budget 仍然超出，则继续裁剪剩余的对话组，直到满足预算。
+        """
+
         trimmed = payloads
 
         if self.max_payloads is not None and self.max_payloads > 0 and len(trimmed) > self.max_payloads:
@@ -50,6 +60,10 @@ class LLMContextManager:
         token_budget: int,
         token_counter: TokenCounter,
     ) -> list[LLMPayload]:
+        """
+        根据 token_budget 对 payloads 进行裁剪
+        """
+
         pinned, tail = self._split_pinned_prefix(payloads)
         groups = self._build_qa_groups(tail)
         if not groups:

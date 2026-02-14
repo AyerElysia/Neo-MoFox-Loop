@@ -1,5 +1,6 @@
 """测试 src.core.components.base.chatter 模块。"""
 
+import json
 from datetime import datetime
 from typing import Generator
 from unittest.mock import MagicMock, patch
@@ -277,7 +278,7 @@ class TestFetchAndFlushUnreads:
         chatter = ConcreteChatter("stream_123", mock_plugin)
 
         # Mock stream manager
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_stream = MagicMock()
             mock_stream.context.unread_messages = []
             # 确保 _streams 是一个字典，支持 .get() 方法
@@ -302,7 +303,7 @@ class TestFetchAndFlushUnreads:
             sender_name="Alice"
         )
 
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_stream = MagicMock()
             # 需要让 unread_messages 是一个真实的列表
             mock_stream.context.unread_messages = [msg]
@@ -312,8 +313,11 @@ class TestFetchAndFlushUnreads:
 
             text, messages = await chatter.fetch_and_flush_unreads()
 
-            assert "Alice" in text
-            assert "你好" in text
+            payload = json.loads(text)
+            assert len(payload) == 1
+            assert payload[0]["sender_name"] == "Alice"
+            assert payload[0]["message_id"] == "msg_1"
+            assert payload[0]["message_type"] == "text"
             assert len(messages) == 1
             mock_stream.context.add_history_message.assert_called_once_with(msg)
             assert len(mock_stream.context.unread_messages) == 0
@@ -334,7 +338,7 @@ class TestFetchAndFlushUnreads:
             for i in range(3)
         ]
 
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_stream = MagicMock()
             mock_stream.context.unread_messages = messages
             mock_stream.context.add_history_message = MagicMock()
@@ -342,11 +346,12 @@ class TestFetchAndFlushUnreads:
 
             text, fetched = await chatter.fetch_and_flush_unreads(format_as_group=True)
 
-            # 验证格式
-            lines = text.split("\n")
-            assert len(lines) == 3
-            assert "User0" in lines[0]
-            assert "消息0" in lines[0]
+            # 验证 JSON 格式
+            payload = json.loads(text)
+            assert len(payload) == 3
+            assert payload[0]["sender_name"] == "User0"
+            assert payload[0]["message_id"] == "msg_0"
+            assert payload[0]["message_type"] == "text"
 
             # 验证flush
             assert len(fetched) == 3
@@ -366,7 +371,7 @@ class TestFetchAndFlushUnreads:
             sender_name="Test"
         )
 
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_stream = MagicMock()
             mock_stream.context.unread_messages = [msg]
             mock_stream.context.add_history_message = MagicMock()
@@ -382,7 +387,7 @@ class TestFetchAndFlushUnreads:
         """测试流不存在的情况。"""
         chatter = ConcreteChatter("stream_123", mock_plugin)
 
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_sm.return_value._streams.get.return_value = None
 
             text, messages = await chatter.fetch_and_flush_unreads()
@@ -403,7 +408,7 @@ class TestFetchAndFlushUnreads:
             sender_name="Test"
         )
 
-        with patch('src.core.managers.stream_manager.get_stream_manager') as mock_sm:
+        with patch('src.core.components.base.chatter.get_stream_manager') as mock_sm:
             mock_stream = MagicMock()
             mock_stream.context.unread_messages = [msg]
             mock_stream.context.add_history_message = MagicMock()
@@ -412,5 +417,5 @@ class TestFetchAndFlushUnreads:
             # 使用完整时间格式
             text, _ = await chatter.fetch_and_flush_unreads(time_format="%Y-%m-%d %H:%M")
 
-            assert "2024-01-01" in text
-            assert "14:30" in text
+            payload = json.loads(text)
+            assert payload[0]["time"] == "2024-01-01 14:30"

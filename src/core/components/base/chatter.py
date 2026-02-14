@@ -405,25 +405,26 @@ class BaseChatter(ABC):
     ) -> tuple[str, list["Message"]]:
         """获取并刷新未读消息。
 
-        从聊天流中获取所有未读消息，按格式组装，并flush到历史消息中。
+        从聊天流中获取所有未读消息，按 JSON 格式组装，并 flush 到历史消息中。
 
         Args:
-            format_as_group: 是否将未读消息格式化为一个组
-            time_format: 时间格式化字符串（默认只显示时分）
+            format_as_group: 是否将未读消息格式化为一个 JSON 组
+            time_format: 时间格式化字符串（用于 time 字段）
 
         Returns:
-            tuple[str, list[Message]]: (格式化后的未读消息文本, 未读消息列表)
+            tuple[str, list[Message]]: (格式化后的未读消息 JSON 文本, 未读消息列表)
 
         Examples:
-            >>> # 格式化为组
+            >>> # 格式化为 JSON 组
             >>> text, messages = await chatter.fetch_and_flush_unreads()
             >>> print(text)
-            "【14:30】Alice: 你好\\n【14:31】Bob: 在吗？"
+            "[{\"message_id\": \"msg_1\", \"time\": \"14:30\", ...}]"
             >>>
             >>> # 不分组，返回原始消息列表
             >>> text, messages = await chatter.fetch_and_flush_unreads(format_as_group=False)
         """
         from datetime import datetime
+        import json
 
         logger = get_logger("chatter")
 
@@ -443,26 +444,37 @@ class BaseChatter(ABC):
             return "", []
 
         if format_as_group:
-            # 格式化为组
-            formatted_lines = []
+            # 格式化为 JSON 组
+            formatted_messages = []
             for msg in unread_messages:
                 # 格式化时间
                 if isinstance(msg.time, (int, float)):
                     time_str = datetime.fromtimestamp(msg.time).strftime(time_format)
+                elif isinstance(msg.time, datetime):
+                    time_str = msg.time.strftime(time_format)
                 else:
                     time_str = str(msg.time)
 
-                # 格式化发送人
-                sender_name = msg.sender_name or msg.sender_id or "未知用户"
+                # 组装消息字段
+                message_type_value = (
+                    msg.message_type.value
+                    if hasattr(msg.message_type, "value")
+                    else str(msg.message_type)
+                )
+                formatted_messages.append(
+                    {
+                        "message_id": msg.message_id,
+                        "time": time_str,
+                        "reply_to": msg.reply_to,
+                        "message_type": message_type_value,
+                        "processed_plain_text": msg.processed_plain_text,
+                        "sender_id": msg.sender_id,
+                        "sender_name": msg.sender_name,
+                        "sender_cardname": msg.sender_cardname,
+                    }
+                )
 
-                # 格式化内容
-                content = str(msg.processed_plain_text) if msg.processed_plain_text else ""
-
-                # 组装行
-                line = f"【{time_str}】{sender_name}: {content}"
-                formatted_lines.append(line)
-
-            formatted_text = "\n".join(formatted_lines)
+            formatted_text = json.dumps(formatted_messages, ensure_ascii=False)
         else:
             formatted_text = ""
 
