@@ -87,17 +87,26 @@ class LLMResponse:
 
         full_content: list[str] = []
         tool_acc = _ToolCallAccumulator()
-        async for event in self._stream:
-            if event.text_delta:
-                full_content.append(event.text_delta)
-                yield event.text_delta
-            if event.tool_name or event.tool_args_delta or event.tool_call_id:
-                tool_acc.apply(event)
+        stream_error: Exception | None = None
+        try:
+            async for event in self._stream:
+                if event.text_delta:
+                    full_content.append(event.text_delta)
+                    yield event.text_delta
+                if event.tool_name or event.tool_args_delta or event.tool_call_id:
+                    tool_acc.apply(event)
+        except Exception as e:
+            # 部分 provider/SDK 会在流尾抛出"连接关闭"等异常。
+            # 先记录异常，确保已收集的内容能正确落库，再重新抛出。
+            stream_error = e
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
         self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
+
+        if stream_error is not None:
+            raise stream_error
 
     async def _collect_full_response(self) -> str:
         if self._consumed:
@@ -111,17 +120,28 @@ class LLMResponse:
 
         full_content: list[str] = []
         tool_acc = _ToolCallAccumulator()
-        async for event in self._stream:
-            if event.text_delta:
-                full_content.append(event.text_delta)
-            if event.tool_name or event.tool_args_delta or event.tool_call_id:
-                tool_acc.apply(event)
+        stream_error: Exception | None = None
+        try:
+            async for event in self._stream:
+                if event.text_delta:
+                    full_content.append(event.text_delta)
+                if event.tool_name or event.tool_args_delta or event.tool_call_id:
+                    tool_acc.apply(event)
+        except Exception as e:
+            # 部分 provider/SDK 会在流尾抛出"连接关闭"等异常。
+            # 先记录异常，确保已收集的内容能正确落库，再重新抛出。
+            stream_error = e
 
         self.message = "".join(full_content)
         self.call_list = tool_acc.finalize()
         self._maybe_apply_tool_call_compat()
         self._maybe_append_response_to_context()
+
+        if stream_error is not None:
+            raise stream_error
+
         return self.message
+
 
     def _maybe_append_response_to_context(self) -> None:
         if not self._auto_append_response:
@@ -292,21 +312,36 @@ class LLMResponse:
 
 
 class _ToolCallAccumulator:
-    """把 OpenAI 风格的 tool_call 增量拼成最终 ToolCall 列表。"""
+    """把 OpenAI 风格的 tool_call 增量拼成最终 ToolCall 列表。
+
+    OpenAI 流式协议中，工具调用分多个 chunk 传输：
+    - 首个 chunk：携带 tool_call_id + tool_name（以及可能的首段 args）
+    - 后续 chunk：tool_call_id 可能为 None，仅携带 tool_args_delta
+
+    因此需要追踪"当前活跃 id"，将无 id 的增量归属到最近一次出现的工具调用。
+    """
 
     def __init__(self) -> None:
         self._by_id: dict[str, dict[str, Any]] = {}
         self._order: list[str] = []
+        self._current_id: str | None = None  # 追踪最近一次有效的 tool_call_id
 
     def apply(self, event: StreamEvent) -> None:
-        if not event.tool_call_id:
+        # 优先使用事件携带的 id；若无则沿用上一次的 id（OpenAI 后续 chunk 不重复发送 id）
+        effective_id = event.tool_call_id or self._current_id
+        if not effective_id:
+            # 既无新 id 又无历史 id，无法归属，丢弃
             return
 
-        if event.tool_call_id not in self._by_id:
-            self._by_id[event.tool_call_id] = {"id": event.tool_call_id, "name": None, "args": ""}
-            self._order.append(event.tool_call_id)
+        if effective_id not in self._by_id:
+            self._by_id[effective_id] = {"id": effective_id, "name": None, "args": ""}
+            self._order.append(effective_id)
 
-        rec = self._by_id[event.tool_call_id]
+        # 更新当前活跃 id
+        if event.tool_call_id:
+            self._current_id = event.tool_call_id
+
+        rec = self._by_id[effective_id]
         if event.tool_name:
             rec["name"] = event.tool_name
         if event.tool_args_delta:

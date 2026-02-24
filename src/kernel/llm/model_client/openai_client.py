@@ -593,6 +593,10 @@ class OpenAIChatClient:
         stream_resp = await client.chat.completions.create(**params, stream=True)
 
         async def iter_events() -> AsyncIterator[StreamEvent]:
+            # OpenAI 标准流格式：后续 chunk 中 tc.id 为 None，tc.index 用于区分不同工具调用。
+            # 维护 index -> tool_call_id 映射，确保后续增量能正确归属。
+            index_to_id: dict[int, str] = {}
+
             try:
                 async for chunk in stream_resp:
                     if not chunk.choices:
@@ -609,8 +613,20 @@ class OpenAIChatClient:
                     if tool_calls_delta:
                         for tc in tool_calls_delta:
                             fn = getattr(tc, "function", None)
+                            tc_id = getattr(tc, "id", None)
+                            tc_index = getattr(tc, "index", None)
+
+                            # 首包：id 非空，记录 index -> id 映射
+                            if tc_id and tc_index is not None:
+                                index_to_id[tc_index] = tc_id
+
+                            # 后续包：id 为 None，通过 index 查找对应 id
+                            effective_id = tc_id
+                            if not effective_id and tc_index is not None:
+                                effective_id = index_to_id.get(tc_index)
+
                             yield StreamEvent(
-                                tool_call_id=getattr(tc, "id", None),
+                                tool_call_id=effective_id,
                                 tool_name=getattr(fn, "name", None) if fn else None,
                                 tool_args_delta=(
                                     getattr(fn, "arguments", None) if fn else None
