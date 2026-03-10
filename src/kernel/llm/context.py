@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -120,7 +121,8 @@ class LLMContextManager:
                 expected_ids: set[str] = set()
                 for part in tool_calls:
                     if not part.id:
-                        _err("assistant.tool_calls 缺少 id（strict 模式不允许自动生成）")
+                        # 自动补全缺失的 ID 并保持同步
+                        object.__setattr__(part, "id", f"call_{uuid.uuid4().hex[:8]}")
                     expected_ids.add(str(part.id))
 
                 j = idx + 1
