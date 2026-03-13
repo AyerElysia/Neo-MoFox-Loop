@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.app.plugin_system.api import agent_api
+from src.app.plugin_system.types import ChatType
 from src.core.components.loader import load_all_plugins
 from src.core.config import get_core_config, init_core_config
 from src.core.managers import get_plugin_manager
@@ -80,11 +81,11 @@ async def main() -> None:
         print(f"   - 参数: {func_schema.get('parameters', {}).get('properties', {}).keys()}")
 
     # 3. 获取特定聊天类型的 Agent
-    agents_for_chat = agent_api.get_agents_for_chat(chat_type="private")
+    agents_for_chat = agent_api.get_agents_for_chat(chat_type=ChatType.PRIVATE)
     print(f"\n4. 私聊可用 Agent 数量: {len(agents_for_chat)}")
 
     # 4. 获取 Agent Schemas
-    schemas_for_chat = agent_api.get_agent_schemas(chat_type="private")
+    schemas_for_chat = agent_api.get_agent_schemas(chat_type=ChatType.PRIVATE)
     print(f"\n5. 私聊 Agent Schema 数量: {len(schemas_for_chat)}")
 
     # 5. 按插件获取 Agent

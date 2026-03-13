@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.app.plugin_system.api import prompt_api
-from src.core.prompt import PromptTemplate
+from src.app.plugin_system.types import PromptTemplate
 
 
 def test_get_template_requires_name() -> None:

@@ -15,10 +15,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.app.plugin_system.api import action_api
+from src.app.plugin_system.types import ChatType, Message
 from src.core.components.loader import load_all_plugins
 from src.core.config import get_core_config, init_core_config
 from src.core.managers import get_plugin_manager
-from src.core.models.message import Message
 from src.core.utils.schema_sync import enforce_database_schema_consistency
 from src.kernel.db import init_database_from_config
 
@@ -59,10 +59,10 @@ async def main() -> None:
     schema = action_api.get_action_schema(first_signature)
     print(f"Action schema: {schema}")
 
-    actions_for_chat = action_api.get_actions_for_chat(chat_type="private")
+    actions_for_chat = action_api.get_actions_for_chat(chat_type=ChatType.PRIVATE)
     print(f"私聊可用 Action 数量: {len(actions_for_chat)}")
 
-    schemas_for_chat = action_api.get_action_schemas(chat_type="private")
+    schemas_for_chat = action_api.get_action_schemas(chat_type=ChatType.PRIVATE)
     print(f"私聊 Action schema 数量: {len(schemas_for_chat)}")
 
     stream_id = "demo_action_stream"
@@ -85,7 +85,7 @@ async def main() -> None:
         sender_id="demo_user",
         sender_name="demo_user",
         platform="demo",
-        chat_type="private",
+        chat_type=ChatType.PRIVATE.value,
         stream_id=stream_id,
     )
 

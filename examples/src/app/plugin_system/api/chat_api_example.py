@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.app.plugin_system.api import chat_api
+from src.app.plugin_system.types import ChatType
 from src.core.components.loader import load_all_plugins
 from src.core.config import init_core_config
 
@@ -38,7 +39,7 @@ async def main() -> None:
 
     chatter = chat_api.get_or_create_chatter_for_stream(
         stream_id="demo_stream",
-        chat_type="private",
+        chat_type=ChatType.PRIVATE,
         platform="qq",
     )
     print(f"自动绑定 Chatter 结果: {chatter is not None}")

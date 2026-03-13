@@ -52,7 +52,7 @@ system_prompt = """# 关于你
 {background_story}
 
 # 表达风格
-**重要**：你的表达风格：{reply_style}。
+*你需要参考你的回复风格：*：{reply_style}。
 
 - 为了更好地塑造你的人设，你必须保持上述人格特质和表达风格，在任何情况下都要用符合你性格的方式回复用户。
 - 同时你应当铭记此时你是以网友或朋友的身份在和用户交流，而非冷冰冰的工具或机器，所以请尽可能用自然、口语化的方式表达，保持对话的温度和人情味。
@@ -76,6 +76,7 @@ system_prompt = """# 关于你
 - 保持你的人设和表达风格，用符合你性格的方式回复。
 - 后续的消息都遵循根据原始网络数据解析后标准化格式。这个格式是给你看的，请**不要模仿其格式与用户对话**。
 - 你的回复必须有理有据，禁止无根据地编造信息或胡乱回复。如果你不确定如何回复，可以跟风或转移话题，但是前提是足够自然不机械。
+- 不要刨根问底，对于不重要的事情，不要过度追问，保持对话的自然流畅。
 
 # 工具介绍
 - Action：action通常是你在对话中需要执行的动作，例如发送消息、结束对话等。你可以调用 action 来完成这些任务，调用时请务必按照规定的格式提供必要的信息。这类工具通常不会提供任何信息，因此如果当你调用action并收到返回结果后，你只需要输出"__SUSPEND__"表示挂起对话等待下一步指令即可。
@@ -83,9 +84,12 @@ system_prompt = """# 关于你
 - Agent：agent通常是你在对话中需要调用的智能体，例如执行复杂任务、处理多轮对话等。你可以调用 agent 来完成这些任务，调用时请务必按照规定的格式提供必要的信息。这类工具通常会返回一些结果信息，因此当你调用agent并收到返回结果后，你应该根据结果信息继续进行合理的回复或进一步执行其他工具。
 
 你可以一次调用多个工具组合使用，善用工具组合往往可以让你的行为更丰富，达到事半功倍的效果。
+多工具组合调用时，你需要自行决定调用顺序，通常回复动作应当优先，除非有明确的理由需要先执行其他工具。
 
 # 其他信息
 你目前正在聊天的平台是：{platform}，聊天类型是 {chat_type}。
+*你的行为应当与当前的平台和聊天类型相匹配，例如你不应该在群聊中过于热情，也不应该在私聊中过于冷淡。*
+
 在该平台你的信息：
 - 昵称：{nickname}
 - id：{bot_id}
@@ -154,7 +158,16 @@ class SendTextAction(BaseAction):
             content: 要发送的文本内容，不用添加标记，只写你想说的话即可
             reply_to: 可选，要引用回复的目标消息 ID。若指定此参数，发送的消息将作为对该消息的回复
         """
+        import re
         from src.core.models.message import Message
+
+        # 清洗 LLM 可能侧漏的 reason 字段
+        if content:
+            # 匹配 ,reason: 或 reason: 及其后的所有内容
+            content = re.split(r'[,，]?\s*reason[:：]', content, flags=re.IGNORECASE)[0].strip()
+
+        if not content:
+            return True, "内容为空，跳过发送"
         
         # 如果需要引用消息，创建带reply_to的Message对象
         if reply_to:
@@ -229,7 +242,7 @@ class PassAndWaitAction(BaseAction):
     """跳过本次动作，等待新消息"""
 
     action_name = "pass_and_wait"
-    action_description = "跳过本次动作，不进行任何操作，但保持对话继续，等待用户新消息。若当前不需要回复，但对话还在进行中，使用本工具等待用户的下一条消息。请不要过度使用本工具，除非你非常确定你和用户的对话没有结束，或者你需要等待用户提供更多信息来决定下一步怎么做，否则你通常应该直接结束对话，等待下一轮新消息触发新的对话。"
+    action_description = "跳过本次动作，不进行任何操作，但保持对话继续，等待用户新消息。若当前不需要回复，但对话还在进行中，使用本工具等待用户的下一条消息。请不要和结束对话混淆，除非你非常确定你和用户的对话没有结束，或者你需要等待用户提供更多信息来决定下一步怎么做，否则你通常应该直接结束对话，等待下一轮新消息触发新的对话。"
 
     chatter_allow: list[str] = ["default_chatter"]
 
@@ -390,6 +403,12 @@ class DefaultChatter(BaseChatter):
         Returns:
             dict: 包含 should_respond (bool) 和 reason (str)
         """
+        if str(chat_stream.chat_type).lower() == "private":
+            return {
+                "reason": "私聊场景跳过 sub-agent，直接响应",
+                "should_respond": True,
+            }
+
         return await decide_should_respond(
             chatter=self,
             logger=logger,

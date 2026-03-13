@@ -13,6 +13,13 @@ from src.kernel.llm import LLMPayload, ROLE, Text, ToolResult
 from src.kernel.logger import get_logger
 
 from ..config import PREDEFINED_FOLDERS, BookuMemoryConfig
+from .shared import (
+    build_step_reminder,
+    get_internal_task_name,
+    get_max_reasoning_steps,
+    normalize_tool_name,
+    with_single_system_payload,
+)
 from .tools import (
     BookuMemoryFinishTaskTool,
     BookuMemoryGetInherentTool,
@@ -24,90 +31,6 @@ from .tools import (
 
 logger = get_logger("booku_memory_read_agent")
 
-
-def _with_single_system_payload(
-    payloads: list[LLMPayload],
-    *,
-    base_system_prompt: str,
-    step_reminder: str,
-) -> list[LLMPayload]:
-    """确保 payloads 中只存在一个 SYSTEM payload，并注入最新轮次提醒。
-
-    约束：
-    - 禁止出现多个 role=SYSTEM 的 payload。
-    - 轮次提醒只保留最新一条（覆盖旧提醒），并作为 SYSTEM 的首段文本。
-    - 保留 TOOL payload（工具定义）及对话 payload 的相对顺序。
-
-    Args:
-        payloads: 现有 payload 列表。
-        base_system_prompt: 固定系统提示（长 prompt）。
-        step_reminder: 当前轮次提醒文本。
-
-    Returns:
-        新的 payload 列表：SYSTEM（提醒+基础提示） + TOOL* + 其余对话消息。
-    """
-
-    tool_payloads: list[LLMPayload] = []
-    convo_payloads: list[LLMPayload] = []
-    for payload in payloads:
-        if payload.role == ROLE.SYSTEM:
-            continue
-        if payload.role == ROLE.TOOL:
-            tool_payloads.append(payload)
-            continue
-        convo_payloads.append(payload)
-
-    system_payload = LLMPayload(
-        ROLE.SYSTEM,
-        [Text(step_reminder), Text(base_system_prompt)],
-    )
-    return [system_payload, *tool_payloads, *convo_payloads]
-
-
-def _normalize_tool_name(name: str) -> str:
-    """将工具名称应用平台可能添加的 ``tool-`` 前缀进行定洎化。
-
-    部分 LLM 或工具调用框架会自动为工具名称加上 ``tool-`` 前缀，
-    本函数统一展开为原下划线名，使后续逐工具匹配逻辑不必处理两种形式。
-
-    Args:
-        name: 原始工具名称，可能带有或不带 ``tool-`` 前缀。
-
-    Returns:
-        去除 ``tool-`` 前缀后的工具名称。若无前缀则原样返回。
-    """
-    return name[5:] if name.startswith("tool-") else name
-
-
-def _build_step_reminder(*, step_index: int, max_steps: int) -> str:
-    """构建内部推理轮次提醒文本。
-
-    Args:
-        step_index: 当前轮次索引（从 0 开始）。
-        max_steps: 最大轮次数。
-
-    Returns:
-        注入到 SYSTEM 的提醒文本。
-    """
-    # 这里的轮次指“工具执行后、进入下一次模型决策(response.send)前”的 follow-up 轮次。
-    current = step_index + 1
-    remaining_after = max(0, max_steps - current)
-
-    if current >= max_steps:
-        return (
-            "【推理轮次提醒】"
-            f"你已到达最后一轮 follow-up（{current}/{max_steps}）。"
-            "请立刻调用 memory_finish_task(content=...) 结束并返回总结，"
-            "不要再调用 memory_retrieve/memory_grep/memory_read_full_content/memory_status/memory_inherent_read 等其他工具。"
-        )
-
-    return (
-        "【推理轮次提醒】"
-        f"当前 follow-up 轮次：{current}/{max_steps}。"
-        f"本轮结束后剩余可用轮数：{remaining_after}。"
-        "请控制工具调用数量，必要时在最后一轮调用 memory_finish_task(content=...) 返回当前结论与依据。"
-    )
-
 class BookuMemoryReadAgent(BaseAgent):
     """Booku 记忆读取 Agent。
 
@@ -118,6 +41,7 @@ class BookuMemoryReadAgent(BaseAgent):
     1. inherent 层：始终通过向量检索查询（固有记忆优先级最高）
     2. emergent 层：近期活跃记忆，优先召回
     3. archived 层：仅在 include_archived=True 或 emergent 结果不足时检索
+    4. knowledge 层：仅在 include_knowledge=True 时检索
 
     最终 LLM 综合所有检索结果，生成「结论摘要」，并附带来源 memory_id 列表。
     """
@@ -129,6 +53,8 @@ class BookuMemoryReadAgent(BaseAgent):
 2.用户提到“之前说过”、“还记得吗”等词汇时。
 3.需要个性化建议时（如推荐电影、食物，需先查喜好）。
 4.存在不能完全确定的个性化信息时（如用户提过喜欢某类型但未明确说喜欢某个具体选项）。
+5.需要从知识库中检索相关知识时（如用户询问专业知识、技术细节）。
+6.任何你无法完全确定是否需要调用记忆的情况时，优先调用此工具进行检索，获取相关信息后再决定如何回答。
 注意：如果不读取记忆直接回答，可能会忘记用户名字或偏好，导致用户体验极差。
 """
 
@@ -155,9 +81,7 @@ class BookuMemoryReadAgent(BaseAgent):
         Returns:
             整数形式的推理轮次上限（≥ 1）。
         """
-        if isinstance(self.plugin.config, BookuMemoryConfig):
-            return max(1, int(self.plugin.config.internal_llm.max_reasoning_steps))
-        return 6
+        return get_max_reasoning_steps(self.plugin.config)
 
     def _internal_task_name(self) -> str:
         """从插件配置读取内部 LLM 决策使用的模型任务名（task_name）。
@@ -168,11 +92,7 @@ class BookuMemoryReadAgent(BaseAgent):
         Returns:
             模型任务名字符串，用于 ``get_model_set_by_task()`` 查找对应模型。
         """
-        if isinstance(self.plugin.config, BookuMemoryConfig):
-            task_name = self.plugin.config.internal_llm.task_name.strip()
-            if task_name:
-                return task_name
-        return "tool_use"
+        return get_internal_task_name(self.plugin.config)
 
     @staticmethod
     def _build_system_prompt() -> str:
@@ -213,7 +133,9 @@ class BookuMemoryReadAgent(BaseAgent):
             "  • 精确匹配：query原词 + 推断tags\n"
             "  • 语义扩展：query同义/相关词 + 宽泛tags\n"
             "  • 场景关联：从任务场景反推可能的记忆类型\n"
-            "- 建议先设置 include_archived=false，若无结果再尝试 true\n\n"
+            "- 建议先设置 include_archived=false，若无结果再尝试 true\n"
+            "- 若问题与专业知识相关，建议设置 include_knowledge=true, 若无需访问知识库或已经访问过但无结果则设为 false\n"
+            "- user如果在payload中显式设置了include_knowledge=true或include_archived=true, 那这些参数必须被严格遵守, 不能忽略或改变\n\n"
 
             "### 阶段3：结果评估与全文读取\n"
             "- 阅读 memory_retrieve 返回的片段结果，判断：\n"
@@ -234,6 +156,7 @@ class BookuMemoryReadAgent(BaseAgent):
             "  • 记忆总量是否很少？→ 是：直接 memory_finish_task 说明'记忆库内容不足'\n"
             "  • 目标 folder 是否为空？→ 是：尝试切换 folder_id 或说明范围限制\n"
             "  • 最近是否有新记忆？→ 否：提示用户可能尚未记录相关信息\n"
+            "- memory_status 不包括知识库中的记忆\n"
             "- ⚠️ 严禁编造：无依据时明确说明'未找到相关记忆'，可基于常识给出建议但需标注\n\n"
 
             "### 阶段6：迭代尝试的防无用功机制\n"
@@ -281,6 +204,7 @@ class BookuMemoryReadAgent(BaseAgent):
         opposing_tags: Annotated[list[str], "对立标签，抑制不希望召回的方向"],
         context: Annotated[str, "当前对话上下文（可选），辅助语义精确化，推荐填写以帮助agent理解检索场景"] = "",
         include_archived: Annotated[bool, "是否检索归档层（默认 False）"] = False,
+        include_knowledge: Annotated[bool, "是否检索知识库（默认 False）"] = False,
     ) -> tuple[bool, str | dict[str, Any]]:
         """执行记忆检索与综合任务，内部将运行多轮 LLM 工具调用循环。
 
@@ -297,6 +221,7 @@ class BookuMemoryReadAgent(BaseAgent):
             opposing_tags: 对立标签，为内部 LLM 提供检索抽象限制。
             context: 对话上下文文本，会被拼接到 intent_text 后一起加入检索。
             include_archived: 传递给内部 LLM 的归档层检索开关，默认 False。
+            include_knowledge: 传递给内部 LLM 的知识库检索开关，默认 False。
 
         Returns:
             成功时返回 ``(True, summary_text)``，summary_text 为内部 LLM 生成的
@@ -323,17 +248,21 @@ class BookuMemoryReadAgent(BaseAgent):
                 LLMPayload(
                     ROLE.USER,
                     Text(
-                        json.dumps(
-                            {
-                                "intent_text": intent_text.strip(),
-                                "context": context.strip(),
-                                "query_text": query_text,
-                                "core_tags": core_tags or [],
-                                "diffusion_tags": diffusion_tags or [],
-                                "opposing_tags": opposing_tags or [],
-                                "include_archived": include_archived,
-                            },
-                            ensure_ascii=False,
+                        "\n".join(
+                            ("以下参数必须严格遵守，不能忽略或改变：\n",
+                            json.dumps(
+                                {
+                                    "intent_text": intent_text.strip(),
+                                    "context": context.strip(),
+                                    "query_text": query_text,
+                                    "core_tags": core_tags or [],
+                                    "diffusion_tags": diffusion_tags or [],
+                                    "opposing_tags": opposing_tags or [],
+                                    "include_archived": include_archived,
+                                    "include_knowledge": include_knowledge,
+                                },
+                                ensure_ascii=False,
+                            ))
                         )
                     ),
                 )
@@ -348,12 +277,13 @@ class BookuMemoryReadAgent(BaseAgent):
             for step_index in range(max_steps):
                 calls = response.call_list or []
                 if not calls:
-                    break
+                    logger.warning("LLM 未返回任何工具调用，可能是模型配置问题，建议更换模型。")
+                    return []
                 for call in calls:
                     logger.info(f"调用工具：{call.name}")
                     logger.debug(f"工具调用请求：{call.name}，参数：{call.args}")
 
-                    normalized_name = _normalize_tool_name(call.name)
+                    normalized_name = normalize_tool_name(call.name)
                     args = call.args if isinstance(call.args, dict) else {}
                     if normalized_name == "memory_finish_task":
                         finish_content = str(args.get("content", "")).strip()
@@ -377,10 +307,22 @@ class BookuMemoryReadAgent(BaseAgent):
                         )
                     )
 
-                response.payloads = _with_single_system_payload(
+                response.payloads = with_single_system_payload(
                     response.payloads,
                     base_system_prompt=base_system_prompt,
-                    step_reminder=_build_step_reminder(step_index=step_index, max_steps=max_steps),
+                    step_reminder=build_step_reminder(
+                        step_index=step_index,
+                        max_steps=max_steps,
+                        final_round_instruction=(
+                            "请立刻调用 memory_finish_task(content=...) 结束并返回总结，"
+                            "不要再调用 memory_retrieve/memory_grep/memory_read_full_content/"
+                            "memory_status/memory_inherent_read 等其他工具。"
+                        ),
+                        ongoing_instruction=(
+                            "请控制工具调用数量，必要时在最后一轮调用 "
+                            "memory_finish_task(content=...) 返回当前结论与依据。"
+                        ),
+                    ),
                 )
                 response = await response.send(stream=False)
                 await response

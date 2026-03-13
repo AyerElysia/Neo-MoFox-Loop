@@ -15,8 +15,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.app.plugin_system.api import stream_api
+from src.app.plugin_system.types import ChatType, Message, MessageType
 from src.core.config import get_core_config, init_core_config
-from src.core.models.message import Message, MessageType
 from src.core.utils.schema_sync import enforce_database_schema_consistency
 from src.kernel.db import init_database_from_config
 
@@ -47,7 +47,7 @@ async def main() -> None:
     chat_stream = await stream_api.get_or_create_stream(
         platform="qq",
         user_id="demo_user",
-        chat_type="private",
+        chat_type=ChatType.PRIVATE,
     )
     print(f"创建/获取聊天流: {chat_stream.stream_id}")
 
@@ -59,7 +59,7 @@ async def main() -> None:
         sender_id="demo_user",
         sender_name="demo_user",
         platform="qq",
-        chat_type="private",
+        chat_type=ChatType.PRIVATE.value,
         stream_id=chat_stream.stream_id,
     )
     await stream_api.add_message(message)

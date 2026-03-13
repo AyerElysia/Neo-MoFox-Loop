@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from src.app.plugin_system.api import chat_api
-from src.core.components.types import ChatType
+from src.app.plugin_system.types import ChatType
+from src.core.components.base.chatter import BaseChatter
 
 
 def test_get_all_chatters_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,13 +70,13 @@ def test_get_chatter_class_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_register_active_chatter_requires_stream_id() -> None:
     """stream_id 为空时应抛出 ValueError。"""
     with pytest.raises(ValueError, match="stream_id 不能为空"):
-        chat_api.register_active_chatter("", object())
+        chat_api.register_active_chatter("", cast(BaseChatter, object()))
 
 
 def test_register_active_chatter_requires_chatter() -> None:
     """chatter 为空时应抛出 ValueError。"""
     with pytest.raises(ValueError, match="chatter 不能为空"):
-        chat_api.register_active_chatter("stream_1", None)
+        chat_api.register_active_chatter("stream_1", cast(BaseChatter, None))
 
 
 def test_register_active_chatter_delegates(
@@ -81,7 +84,7 @@ def test_register_active_chatter_delegates(
 ) -> None:
     """register_active_chatter 应委托给 ChatterManager。"""
     captured: dict[str, object] = {}
-    chatter = object()
+    chatter = cast(BaseChatter, object())
 
     class _FakeManager:
         def register_active_chatter(self, stream_id: str, chatter_obj: object) -> None:
@@ -207,7 +210,11 @@ def test_get_or_create_chatter_for_stream_rejects_invalid_chat_type(
     monkeypatch.setattr(chat_api, "_get_chatter_manager", lambda: _FakeManager())
 
     with pytest.raises(TypeError, match="chat_type 必须是 ChatType 或 str"):
-        chat_api.get_or_create_chatter_for_stream("stream_1", 1, "qq")
+        chat_api.get_or_create_chatter_for_stream(
+            "stream_1",
+            cast(ChatType | str, 1),
+            "qq",
+        )
 
 
 def test_get_chatter_by_stream_requires_stream_id() -> None:

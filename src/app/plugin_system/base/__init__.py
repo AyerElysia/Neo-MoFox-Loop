@@ -17,6 +17,9 @@ from src.core.components.base import (
     Success,
     Wait,
 )
+from src.core.components.base.command import cmd_route
+from src.core.components.loader import register_plugin
+from src.core.components.base.config import Field, SectionBase, config_section
 
 __all__ = [
     "BaseAction",
@@ -31,6 +34,11 @@ __all__ = [
     "BaseService",
     "BaseTool",
     "CommandNode",
+    "cmd_route",
+    "register_plugin",
+    "Field",
+    "SectionBase",
+    "config_section",
     "Failure",
     "Success",
     "Wait",

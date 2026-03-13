@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.app.plugin_system.api import agent_api
+from src.app.plugin_system.types import ChatType
 from src.core.components.base.agent import BaseAgent
 from src.core.components.base.tool import BaseTool
-from src.core.components.types import ChatType
 
 
 class MockPrivateTool(BaseTool):
