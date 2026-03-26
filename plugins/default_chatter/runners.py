@@ -16,7 +16,7 @@ from .type_defs import DefaultChatterRuntime, LLMConversationState, LLMResponseL
 from .tool_flow import append_suspend_payload_if_action_only, process_tool_calls
 
 # LLM 返回纯文本（非 tool call）时的最大重试次数
-_MAX_PLAIN_TEXT_RETRIES = 2
+_MAX_PLAIN_TEXT_RETRIES = 0
 
 # 重试时注入的提醒文本
 _PLAIN_TEXT_RETRY_REMINDER = (
@@ -96,6 +96,7 @@ async def run_enhanced(
     stop_call_name: str,
     send_text_call_name: str,
     suspend_text: str,
+    enable_cooldown: bool = False,
 ) -> AsyncGenerator[Wait | Success | Failure | Stop, None]:
     """enhanced 模式执行流程。"""
     try:
@@ -201,25 +202,8 @@ async def run_enhanced(
 
             if not llm_response.call_list:
                 if llm_response.message and llm_response.message.strip():
-                    if rt.plain_text_retry_count < _MAX_PLAIN_TEXT_RETRIES:
-                        rt.plain_text_retry_count += 1
-                        logger.warning(
-                            f"LLM 返回了纯文本而非 tool call"
-                            f"（第 {rt.plain_text_retry_count}/{_MAX_PLAIN_TEXT_RETRIES} 次重试）: "
-                            f"{llm_response.message[:100]}"
-                        )
-                        llm_response.add_payload(
-                            LLMPayload(ROLE.USER, Text(_PLAIN_TEXT_RETRY_REMINDER))
-                        )
-                        _transition(
-                            rt=rt,
-                            to_phase=_ToolCallWorkflowPhase.MODEL_TURN,
-                            logger=logger,
-                            reason="plain text retry",
-                        )
-                        continue
                     logger.warning(
-                        f"LLM 返回了纯文本而非 tool call（已达最大重试次数 {_MAX_PLAIN_TEXT_RETRIES}）: "
+                        f"LLM 返回了纯文本而非 tool call: "
                         f"{llm_response.message[:100]}"
                     )
                     yield Stop(0)
@@ -249,8 +233,9 @@ async def run_enhanced(
             )
 
             if call_outcome.should_stop:
-                logger.info(f"对话已结束，冷却 {call_outcome.stop_minutes} 分钟")
-                yield Stop(call_outcome.stop_minutes * 60)
+                cooldown_seconds = call_outcome.stop_minutes * 60 if enable_cooldown else 0
+                logger.info(f"对话已结束，冷却 {call_outcome.stop_minutes} 分钟（{'已启用' if enable_cooldown else '已禁用，实际不冷却'}）")
+                yield Stop(cooldown_seconds)
                 return
 
             if call_outcome.has_pending_tool_results:
@@ -279,6 +264,7 @@ async def run_classical(
     stop_call_name: str,
     send_text_call_name: str,
     suspend_text: str,
+    enable_cooldown: bool = False,
 ) -> AsyncGenerator[Wait | Success | Failure | Stop, None]:
     """classical 模式执行流程。"""
     try:
@@ -346,19 +332,8 @@ async def run_classical(
 
             if not response.call_list:
                 if response.message and response.message.strip():
-                    if plain_text_retry_count < _MAX_PLAIN_TEXT_RETRIES:
-                        plain_text_retry_count += 1
-                        logger.warning(
-                            f"LLM 返回了纯文本而非 tool call"
-                            f"（第 {plain_text_retry_count}/{_MAX_PLAIN_TEXT_RETRIES} 次重试）: "
-                            f"{response.message[:100]}"
-                        )
-                        response.add_payload(
-                            LLMPayload(ROLE.USER, Text(_PLAIN_TEXT_RETRY_REMINDER))
-                        )
-                        continue
                     logger.warning(
-                        f"LLM 返回了纯文本而非 tool call（已达最大重试次数 {_MAX_PLAIN_TEXT_RETRIES}）: "
+                        f"LLM 返回了纯文本而非 tool call: "
                         f"{response.message[:100]}"
                     )
                 await chatter.flush_unreads(unread_msgs)
@@ -399,9 +374,10 @@ async def run_classical(
                 return
 
             if call_outcome.should_stop:
-                logger.info(f"对话已结束，冷却 {call_outcome.stop_minutes} 分钟")
+                cooldown_seconds = call_outcome.stop_minutes * 60 if enable_cooldown else 0
+                logger.info(f"对话已结束，冷却 {call_outcome.stop_minutes} 分钟（{'已启用' if enable_cooldown else '已禁用，实际不冷却'}）")
                 await chatter.flush_unreads(unread_msgs)
-                yield Stop(call_outcome.stop_minutes * 60)
+                yield Stop(cooldown_seconds)
                 return
 
             if call_outcome.should_wait:

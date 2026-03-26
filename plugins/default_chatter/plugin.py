@@ -91,8 +91,8 @@ system_prompt = """# 关于你
 *你的行为应当与当前的平台和聊天类型相匹配，例如你不应该在群聊中过于热情，也不应该在私聊中过于冷淡。*
 
 在该平台你的信息：
-- 昵称：{nickname}
-- id：{bot_id}
+- 昵称：{platform_name}
+- id：{platform_id}
 
 {extra_info}
 """
@@ -221,7 +221,7 @@ class SendTextAction(BaseAction):
                 processed_plain_text=content,
                 message_type=MessageType.TEXT,
                 sender_id=bot_info.get("bot_id", "") if bot_info else "",
-                sender_name=bot_info.get("bot_nickname", "Bot") if bot_info else "Bot",
+                sender_name=bot_info.get("bot_name", "Bot") if bot_info else "Bot",
                 platform=platform,
                 chat_type=chat_type,
                 stream_id=target_stream_id,
@@ -403,6 +403,12 @@ class DefaultChatter(BaseChatter):
         Returns:
             dict: 包含 should_respond (bool) 和 reason (str)
         """
+        if str(chat_stream.chat_type).lower() == "private":
+            return {
+                "reason": "私聊场景跳过 sub-agent，直接响应",
+                "should_respond": True,
+            }
+
         return await decide_should_respond(
             chatter=self,
             logger=logger,
@@ -445,6 +451,12 @@ class DefaultChatter(BaseChatter):
         self, chat_stream: ChatStream
     ) -> AsyncGenerator[Wait | Success | Failure | Stop, None]:
         """enhanced 模式执行流程（保留原有行为）。"""
+        plugin_config = getattr(self.plugin, "config", None)
+        enable_cooldown = (
+            plugin_config.plugin.enable_cooldown
+            if isinstance(plugin_config, DefaultChatterConfig)
+            else False
+        )
         async for result in run_enhanced(
             chatter=self,
             chat_stream=chat_stream,
@@ -453,6 +465,7 @@ class DefaultChatter(BaseChatter):
             stop_call_name=_STOP_CONVERSATION,
             send_text_call_name=_SEND_TEXT,
             suspend_text=_SUSPEND_TEXT,
+            enable_cooldown=enable_cooldown,
         ):
             yield result
 
@@ -460,6 +473,12 @@ class DefaultChatter(BaseChatter):
         self, chat_stream: ChatStream
     ) -> AsyncGenerator[Wait | Success | Failure | Stop, None]:
         """classical 模式执行流程。"""
+        plugin_config = getattr(self.plugin, "config", None)
+        enable_cooldown = (
+            plugin_config.plugin.enable_cooldown
+            if isinstance(plugin_config, DefaultChatterConfig)
+            else False
+        )
         async for result in run_classical(
             chatter=self,
             chat_stream=chat_stream,
@@ -468,6 +487,7 @@ class DefaultChatter(BaseChatter):
             stop_call_name=_STOP_CONVERSATION,
             send_text_call_name=_SEND_TEXT,
             suspend_text=_SUSPEND_TEXT,
+            enable_cooldown=enable_cooldown,
         ):
             yield result
 
@@ -524,7 +544,9 @@ class DefaultChatterPlugin(BasePlugin):
                 "current_time": optional(
                     datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 ),
-                "extra_info": optional("")
+                "extra_info": optional(""),
+                "platform_name": optional("未知"),
+                "platform_id": optional("未知ID"),
             },
         )
 

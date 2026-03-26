@@ -45,6 +45,19 @@ class DefaultChatterPromptBuilder:
         chat_stream: ChatStream,
     ) -> str:
         """构建系统提示词。"""
+        from src.app.plugin_system.api import adapter_api
+
+        bot_info = await adapter_api.get_bot_info_by_platform(chat_stream.platform) or {}
+        platform_name = str(
+            bot_info.get("bot_name")
+            or chat_stream.bot_nickname
+            or "未知"
+        )
+        platform_id = str(
+            bot_info.get("bot_id")
+            or chat_stream.bot_id
+            or "未知"
+        )
         selected_theme_guide = ""
         if plugin_config is not None:
             chat_type_raw = str(chat_stream.chat_type or "").lower()
@@ -61,7 +74,8 @@ class DefaultChatterPromptBuilder:
             tmpl.set("platform", chat_stream.platform)
             .set("chat_type", chat_stream.chat_type)
             .set("nickname", chat_stream.bot_nickname)
-            .set("bot_id", chat_stream.bot_id)
+            .set("platform_id", platform_id)
+            .set("platform_name", platform_name)
             .set("theme_guide", selected_theme_guide)
             .build()
         )

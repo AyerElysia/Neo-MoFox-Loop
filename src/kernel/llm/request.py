@@ -24,7 +24,7 @@ from .exceptions import LLMConfigurationError, classify_exception
 from .model_client import ModelClientRegistry
 from .monitor import RequestMetrics, RequestTimer, get_global_collector
 from .payload import LLMPayload, Text, ToolResult
-from .policy import RoundRobinPolicy
+from .policy import create_default_policy
 from .policy.base import Policy
 from .response import LLMResponse
 from .roles import ROLE
@@ -63,6 +63,13 @@ def _extract_tools(payloads: list[LLMPayload]) -> list[LLMUsable]:
         if payload.role != ROLE.TOOL:
             continue
         for part in payload.content:
+            # TOOL payload 允许传入工具类（type）或工具实例。
+            # 这里显式兼容两种形式，避免仅依赖 Protocol 的 isinstance 细节。
+            if isinstance(part, type):
+                if issubclass(part, LLMUsable):
+                    tools.append(part)
+                continue
+
             if isinstance(part, LLMUsable):
                 tools.append(part)
     return tools
@@ -86,7 +93,7 @@ class LLMRequest:
         if self.payloads is None:
             self.payloads = []
         if self.policy is None:
-            self.policy = RoundRobinPolicy()
+            self.policy = create_default_policy()
         if self.clients is None:
             self.clients = ModelClientRegistry()
         if self.context_manager is None:

@@ -23,14 +23,37 @@ from src.kernel.llm.tool_call_compat import (
 from ..exceptions import LLMConfigurationError, LLMContentFilterError
 from ..payload import Image, LLMPayload, Text, ToolCall, ToolResult
 from ..roles import ROLE
+from ..token_counter import count_payload_tokens
 from .base import StreamEvent
 
 
-def _log_openai_request_body(api_name: str, params: dict[str, Any]) -> None:
+def _log_openai_request_body(
+    api_name: str,
+    params: dict[str, Any],
+    *,
+    model_set: dict[str, Any] | None = None,
+    payloads: list[LLMPayload] | None = None,
+    request_name: str | None = None,
+) -> None:
     """将 OpenAI 请求体送入请求检视器，便于在 WebUI 中核查 payload 结构。"""
+    metadata: dict[str, Any] = {}
+    if isinstance(model_set, dict):
+        provider = model_set.get("api_provider") or model_set.get("client_type") or model_set.get("base_url")
+        if provider is not None:
+            metadata["api_provider"] = str(provider)
+    if request_name:
+        metadata["request_name"] = request_name
+    if payloads:
+        try:
+            metadata["estimated_input_tokens"] = count_payload_tokens(
+                payloads,
+                model_identifier=str(params.get("model") or "cl100k_base"),
+            )
+        except Exception:
+            pass
     try:
         from src.kernel.llm.request_inspector import capture
-        capture(api_name, params)
+        capture(api_name, params, metadata)
     except Exception:
         pass
 
@@ -101,17 +124,20 @@ def _image_to_data_url(value: str) -> str:
     if _is_data_url(value):
         return value
 
-    path = Path(value)
-    if path.exists() and path.is_file():
-        data = path.read_bytes()
-        b64 = base64.b64encode(data).decode("ascii")
-        return f"data:image/png;base64,{b64}"
-
     # 尝试作为纯 base64 字符串处理（Image.value 规范化后为纯 base64）
     try:
         base64.b64decode(value, validate=True)
         return f"data:image/png;base64,{value}"
     except Exception:
+        pass
+
+    path = Path(value)
+    try:
+        if path.exists() and path.is_file():
+            data = path.read_bytes()
+            b64 = base64.b64encode(data).decode("ascii")
+            return f"data:image/png;base64,{b64}"
+    except OSError:
         pass
 
     raise FileNotFoundError(f"Image file not found: {value}")
@@ -142,7 +168,9 @@ def _to_openai_tool(tool: Any) -> dict[str, Any]:
     if isinstance(params, dict):
         _normalize_schema_for_grammar(params)
     props = params.get("properties", {})
-    if "reason" not in props:
+    schema_has_reason = isinstance(props, dict) and "reason" in props
+    execute_has_reason = _callable_accepts_reason(getattr(tool, "execute", None))
+    if not schema_has_reason and not execute_has_reason:
         props["reason"] = {
             "type": "string",
             "description": "说明你选择此动作/工具的原因",
@@ -156,6 +184,32 @@ def _to_openai_tool(tool: Any) -> dict[str, Any]:
         result["function"] = func
 
     return result
+
+
+def _callable_accepts_reason(callable_obj: Any) -> bool:
+    """判断可调用对象是否显式接收 ``reason`` 参数。
+
+    Args:
+        callable_obj: 待检查的可调用对象（通常是组件 ``execute``）。
+
+    Returns:
+        bool: 若显式声明 ``reason`` 或存在 ``**kwargs`` 则返回 True。
+    """
+    if not callable(callable_obj):
+        return False
+
+    try:
+        sig = inspect.signature(callable_obj)
+    except (TypeError, ValueError):
+        return False
+
+    if "reason" in sig.parameters:
+        return True
+
+    return any(
+        p.kind == inspect.Parameter.VAR_KEYWORD
+        for p in sig.parameters.values()
+    )
 
 
 def _normalize_schema_for_grammar(schema: Any) -> None:
@@ -617,7 +671,6 @@ class OpenAIChatClient:
             ValueError: api_key 为空或 extra_params 非 dict 时抛出。
             LLMContentFilterError: 模型返回空 choices 时抛出。
         """
-        del request_name  # 保留参数以满足协议，暂不使用
         del tools  # 通过 payloads 中 ROLE.TOOL 传入，此参数保持协议兼容
 
         if not isinstance(model_set, dict):
@@ -664,6 +717,8 @@ class OpenAIChatClient:
                 # 默认策略：统一使用 required。
                 # 如果无法支持请在 model_set.extra_params 显式传入 tool_choice="auto"。
                 params["tool_choice"] = "required"
+        else:
+            params.pop("tool_choice", None)
 
         # 新增：区分标准参数与非标准参数（统一走 extra_body，避免 openai SDK 因未知参数报错）
         standard_params = {
@@ -702,6 +757,14 @@ class OpenAIChatClient:
                 ):
                     content = msg.get("content")
                     msg["reasoning_content"] = content if isinstance(content, str) else ""
+
+        _log_openai_request_body(
+            "chat.completions.create",
+            params,
+            model_set=model_set,
+            payloads=payloads,
+            request_name=request_name,
+        )
 
         if not stream:
             return await self._create_non_stream(
@@ -756,7 +819,6 @@ class OpenAIChatClient:
             LLMContentFilterError: 模型返回空 choices 时抛出。
         """
         try:
-            _log_openai_request_body("chat.completions.create", params)
             resp = await client.chat.completions.create(**params)
         except Exception as e:
             err_name = type(e).__name__.lower()
@@ -814,7 +876,6 @@ class OpenAIChatClient:
         """
         stream_params = dict(params)
         stream_params["stream"] = True
-        _log_openai_request_body("chat.completions.create", stream_params)
         stream_resp = await client.chat.completions.create(**params, stream=True)
 
         async def iter_events() -> AsyncIterator[StreamEvent]:
