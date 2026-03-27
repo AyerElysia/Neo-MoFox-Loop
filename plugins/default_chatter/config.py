@@ -17,6 +17,72 @@ class DefaultChatterConfig(BaseConfig):
     class PluginSection(SectionBase):
         """插件基础配置。"""
 
+        @config_section("identity_context", title="身份上下文", tag="ai", order=5)
+        class IdentityContextSection(SectionBase):
+            """Soul/Memory 身份上下文配置。"""
+
+            workspace_base_path: str = Field(
+                default="data/anysoul_workspace",
+                description="身份工作空间根目录（包含 soul.md 和 memory/）",
+                label="工作空间路径",
+                tag="path",
+                order=0,
+            )
+            soul_rel_path: str = Field(
+                default="soul.md",
+                description="Soul 文件相对路径（相对于工作空间根目录）",
+                label="Soul 路径",
+                tag="path",
+                order=1,
+            )
+            memory_rel_path: str = Field(
+                default="memory.md",
+                description="长期记忆文件相对路径（相对于工作空间根目录）",
+                label="长期记忆路径",
+                tag="path",
+                order=2,
+            )
+            memory_max_chars: int = Field(
+                default=6000,
+                description="长期记忆注入系统提示词的最大字符数",
+                label="长期记忆长度上限",
+                tag="ai",
+                order=3,
+            )
+            memory_dirs: list[str] = Field(
+                default=[
+                    "memory/conversations",
+                    "memory/relationships",
+                    "memory/knowledge",
+                    "memory/reflections",
+                ],
+                description="（已弃用）历史目录扫描配置，不再用于系统提示词注入",
+                label="记忆目录（弃用）",
+                tag="path",
+                order=90,
+            )
+            memory_max_files: int = Field(
+                default=8,
+                description="（已弃用）历史目录扫描文件上限",
+                label="记忆文件上限（弃用）",
+                tag="ai",
+                order=91,
+            )
+            soul_max_chars: int = Field(
+                default=5000,
+                description="Soul 注入的最大字符数",
+                label="Soul 长度上限",
+                tag="ai",
+                order=4,
+            )
+            memory_snippet_chars: int = Field(
+                default=260,
+                description="（已弃用）目录扫描模式下单条记忆片段长度",
+                label="记忆片段长度（弃用）",
+                tag="ai",
+                order=92,
+            )
+
         @config_section("theme_guide", title="场景引导", tag="text", order=10)
         class ThemeGuideSection(SectionBase):
             """不同聊天类型的人设/语气引导。"""
@@ -65,6 +131,13 @@ class DefaultChatterConfig(BaseConfig):
             hint="开启后会在每轮对话中强调禁止行为",
             order=2
         )
+        negative_behaviors: list[str] = Field(
+            default=[],
+            description="额外负面行为约束（可选）。启用增强负面行为约束时会注入。",
+            label="负面行为约束",
+            tag="ai",
+            order=21,
+        )
         enable_cooldown: bool = Field(
             default=True,
             description="是否启用回复后冷却功能。开启后 stop_conversation 工具指定的冷却时间将生效，期间新消息不会触发回复；关闭时冷却时间归零，消息可立即触发新对话",
@@ -78,6 +151,19 @@ class DefaultChatterConfig(BaseConfig):
             description="按聊天类型区分的额外提示词",
             label="场景引导配置",
             order=4
+        )
+        identity_context: IdentityContextSection = Field(
+            default_factory=IdentityContextSection,
+            description="Soul/Memory 身份上下文配置",
+            label="身份上下文配置",
+            order=5,
+        )
+        task_executor_usables: list[str] = Field(
+            default_factory=lambda: ["default_chatter:action:send_text"],
+            description="任务态执行器可调用组件签名列表（TaskChatExecutorAgent）",
+            label="任务态执行器可用组件",
+            tag="ai",
+            order=6,
         )
 
     plugin: PluginSection = Field(default_factory=PluginSection)
