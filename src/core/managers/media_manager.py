@@ -82,9 +82,12 @@ class MediaManager:
             manager = get_prompt_manager()
             
             # 注册图片识别提示词
+            from src.core.config import get_core_config
+            custom_prompt = get_core_config().chat.image_recognition_prompt
+            default_template = "描述这张图片的内容，包含主题、主要元素。若有文字或代码，完整转述。"
             image_prompt = PromptTemplate(
                 name="media.image_recognition",
-                template="请描述这张图片，字数控制在100字以内。简要说明图片主题、核心元素及背景环境。如果图片中包含任何文字或代码，请完整转述，这部分不计入字数限制，力求客观、生动地还原图片内容。"
+                template=custom_prompt if custom_prompt else default_template
             )
             manager.register_template(image_prompt)
             
@@ -348,10 +351,16 @@ class MediaManager:
 
             async with get_db_session() as session:
                 # 查找现有记录（使用 image_id 作为唯一标识）
+                # 这里使用 scalars().first() 来避免数据库中存在多条重复记录导致的 MultipleResultsFound 错误
                 from sqlalchemy import select
-                stmt = select(Images).where(Images.image_id == media_hash)
+                stmt = (
+                    select(Images)
+                    .where(Images.image_id == media_hash)
+                    .order_by(Images.timestamp.desc())
+                    .limit(1)
+                )
                 result = await session.execute(stmt)
-                existing = result.scalar_one_or_none()
+                existing = result.scalars().first()
 
                 if existing:
                     # 更新现有记录
@@ -395,9 +404,16 @@ class MediaManager:
             from sqlalchemy import select
 
             async with get_db_session() as session:
-                stmt = select(Images).where(Images.image_id == media_hash)
+                # 如果存在多条重复记录，取最新一条返回
+                from sqlalchemy import select
+                stmt = (
+                    select(Images)
+                    .where(Images.image_id == media_hash)
+                    .order_by(Images.timestamp.desc())
+                    .limit(1)
+                )
                 result = await session.execute(stmt)
-                media = result.scalar_one_or_none()
+                media = result.scalars().first()
 
                 if media:
                     return {
@@ -516,7 +532,8 @@ class MediaManager:
                     ImageDescriptions.type == media_type
                 )
                 result = await session.execute(stmt)
-                desc = result.scalar_one_or_none()
+                # 使用 scalars().first() 避免 MultipleResultsFound 错误
+                desc = result.scalars().first()
 
                 return desc.description if desc else None
 
@@ -543,13 +560,20 @@ class MediaManager:
             from sqlalchemy import select
 
             async with get_db_session() as session:
-                # 检查是否已存在
-                stmt = select(ImageDescriptions).where(
-                    ImageDescriptions.image_description_hash == media_hash,
-                    ImageDescriptions.type == media_type
+                # 检查是否已存在（避免重复记录导致 MultipleResultsFound）
+                from sqlalchemy import select
+                stmt = (
+                    select(ImageDescriptions)
+                    .where(
+                        ImageDescriptions.image_description_hash == media_hash,
+                        ImageDescriptions.type == media_type
+                    )
+                    .order_by(ImageDescriptions.timestamp.desc())
+                    .limit(1)
                 )
                 result = await session.execute(stmt)
-                existing = result.scalar_one_or_none()
+                # 使用 scalars().first() 避免 MultipleResultsFound 错误
+                existing = result.scalars().first()
 
                 if not existing:
                     # 创建新缓存记录

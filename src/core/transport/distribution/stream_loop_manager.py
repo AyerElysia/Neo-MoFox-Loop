@@ -59,6 +59,12 @@ class StreamLoopManager:
         # 流启动锁：防止并发启动同一个流的多个任务
         self._stream_start_locks: dict[str, asyncio.Lock] = {}
 
+        # WatchDog 重启防抖状态
+        # - _restart_inflight: 当前正在执行重启的流
+        # - _restart_next_allowed_at: 下一次允许触发重启的单调时间戳
+        self._restart_inflight: set[str] = set()
+        self._restart_next_allowed_at: dict[str, float] = {}
+
         # 对话执行生成器：stream_id -> generator
         self._chatter_genes: dict[str, AsyncGenerator[Any, None]] = {}
 
@@ -155,12 +161,11 @@ class StreamLoopManager:
                 logger.warning(f"[管理器] stream={stream_id[:8]}, 强制启动：取消现有任务")
                 old_task = context.stream_loop_task
                 old_task.cancel()
-                try:
-                    await asyncio.wait_for(old_task, timeout=2.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
-                except Exception as e:
-                    logger.warning(f"等待旧任务结束时出错: {e}")
+                # 真正需要 WatchDog 强制重启时，旧任务往往正处于“已取消但迟迟不退出”的状态。
+                # 若这里继续等待它结束，会把新任务恢复也一起拖死。
+                self._chatter_genes.pop(stream_id, None)
+                self._wait_states.pop(stream_id, None)
+                context.is_chatter_processing = False
 
             # 创建新的驱动器任务
             try:
@@ -171,6 +176,8 @@ class StreamLoopManager:
                 tick_interval = get_core_config().bot.tick_interval
                 warning_threshold = get_core_config().bot.stream_warning_threshold
                 restart_threshold = get_core_config().bot.stream_restart_threshold
+                # 重启冷却不应与“卡死判定阈值”同量级，否则首次失败后会长时间无法再次有效重试。
+                restart_cooldown = max(tick_interval, min(30.0, tick_interval * 2.0))
 
                 loop_task = get_task_manager().create_task(
                     run_chat_stream(stream_id, self),
@@ -185,7 +192,10 @@ class StreamLoopManager:
                     """在线程环境中安全调度流重启。"""
                     try:
                         future = asyncio.run_coroutine_threadsafe(
-                            self.restart_stream_loop(stream_id),
+                            self._restart_stream_loop_from_watchdog(
+                                stream_id=stream_id,
+                                cooldown=restart_cooldown,
+                            ),
                             event_loop,
                         )
 
@@ -209,6 +219,7 @@ class StreamLoopManager:
                     warning_threshold=warning_threshold,
                     restart_threshold=restart_threshold,
                     restart_callback=_restart_stream_in_loop,
+                    restart_cooldown=restart_cooldown,
                 )
                 
                 self._stats["active_streams"] += 1
@@ -261,6 +272,42 @@ class StreamLoopManager:
             bool: 是否成功重启
         """
         return await self.start_stream_loop(stream_id, force=True)
+
+    async def _restart_stream_loop_from_watchdog(self, stream_id: str, cooldown: float) -> bool:
+        """处理 WatchDog 触发的重启请求（带节流与并发保护）。
+
+        Args:
+            stream_id: 流 ID
+            cooldown: 重启冷却时间（秒）
+
+        Returns:
+            bool: 是否实际执行了重启
+        """
+        now = time.monotonic()
+        next_allowed_at = self._restart_next_allowed_at.get(stream_id, 0.0)
+
+        if now < next_allowed_at:
+            logger.debug(
+                f"[管理器] stream={stream_id[:8]}, WatchDog 重启被冷却窗口抑制"
+            )
+            return False
+
+        if stream_id in self._restart_inflight:
+            logger.debug(
+                f"[管理器] stream={stream_id[:8]}, WatchDog 重启请求已在执行中"
+            )
+            return False
+
+        self._restart_inflight.add(stream_id)
+        self._restart_next_allowed_at[stream_id] = now + cooldown
+
+        try:
+            logger.warning(
+                f"[管理器] stream={stream_id[:8]}, 执行 WatchDog 触发的流重启"
+            )
+            return await self.restart_stream_loop(stream_id)
+        finally:
+            self._restart_inflight.discard(stream_id)
     
     # ========================================================================
     # 内部方法 — 上下文管理

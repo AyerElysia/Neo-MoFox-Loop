@@ -15,6 +15,13 @@ from src.kernel.llm.exceptions import (
 )
 from src.kernel.llm.model_client.base import StreamEvent
 from src.kernel.llm.payload import LLMPayload, Text, ToolResult
+from src.kernel.llm.policy import (
+    LoadBalancedPolicy,
+    RoundRobinPolicy,
+    create_default_policy,
+    create_policy,
+    set_default_policy_factory,
+)
 from src.kernel.llm.request import LLMRequest
 from src.kernel.llm.roles import ROLE
 
@@ -147,8 +154,23 @@ class TestLLMRequest:
         """Test that request initializes default values."""
         request = LLMRequest(mock_model_set, "test", payloads=None)
         assert request.payloads == []
-        assert request.policy is not None  # RoundRobinPolicy
+        assert isinstance(request.policy, LoadBalancedPolicy)
         assert request.clients is not None  # ModelClientRegistry
+
+    def test_create_default_policy_without_config_uses_load_balanced(self) -> None:
+        """Test default policy fallback when model config is not initialized."""
+        set_default_policy_factory(None)
+        policy = create_default_policy()
+        assert isinstance(policy, LoadBalancedPolicy)
+
+    def test_create_default_policy_uses_injected_factory(self) -> None:
+        """Test default policy respects injected factory from upper layer."""
+        try:
+            set_default_policy_factory(lambda: create_policy("round_robin"))
+            policy = create_default_policy()
+            assert isinstance(policy, RoundRobinPolicy)
+        finally:
+            set_default_policy_factory(None)
 
     def test_add_payload(self, mock_model_set: list[dict[str, Any]]) -> None:
         """Test add_payload method."""
@@ -395,6 +417,33 @@ class TestExtractTools:
         tools = _extract_tools(payloads)
 
         assert len(tools) == 0
+
+    def test_extract_tools_supports_class_and_instance(self) -> None:
+        """Test that TOOL payload can contain both usable classes and instances."""
+
+        class ClassTool:
+            @classmethod
+            def to_schema(cls) -> dict:
+                return {"name": "class_tool"}
+
+        class InstanceTool:
+            def to_schema(self) -> dict:
+                return {"name": "instance_tool"}
+
+        class InvalidTool:
+            pass
+
+        from src.kernel.llm.request import _extract_tools
+
+        payloads = [
+            LLMPayload(ROLE.TOOL, [ClassTool, InstanceTool(), InvalidTool]),
+        ]
+
+        tools = _extract_tools(payloads)
+
+        assert len(tools) == 2
+        assert tools[0] is ClassTool
+        assert isinstance(tools[1], InstanceTool)
 
 
 class TestLLMRequestSend:
